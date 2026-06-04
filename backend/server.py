@@ -7,7 +7,7 @@ FastAPI backend providing:
 - Streaming Claude/OpenAI chat via Emergent universal key
 """
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -44,6 +44,9 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER", "")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -1669,6 +1672,409 @@ async def portal_preview(email: EmailStr):
         "org": org,
         "runs": runs,
         "usage": {"runs": total, "estimated_tokens": min(org.get("monthly_token_budget", 0), total * 800)},
+    }
+
+
+# ============================================================
+# P2 · TWILIO SMS + VOICE for LIGHTHOUSE applications
+# ============================================================
+# Inbound SMS to TWILIO_PHONE_NUMBER → parse intent via Claude → save LighthouseApplication → reply SMS
+# Inbound Voice → TwiML <Gather> for speech → transcript → Claude extracts fields → save → confirm
+# ============================================================
+
+try:
+    from twilio.rest import Client as TwilioClient
+    from twilio.twiml.voice_response import VoiceResponse, Gather
+    from twilio.twiml.messaging_response import MessagingResponse
+except Exception:
+    TwilioClient = None
+    VoiceResponse = None
+    Gather = None
+    MessagingResponse = None
+
+
+def _twilio_configured() -> bool:
+    return bool(TwilioClient and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER)
+
+
+def _twilio_client():
+    if not _twilio_configured():
+        return None
+    return TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+
+SMS_PARSE_SYS = (
+    "Extract a JADE OS lighthouse-program application from a free-form SMS or voice transcript. "
+    "Return ONLY JSON with: name, company, title, industry (one of: freight_brokerage, logistics, manufacturing, "
+    "healthcare, saas, ecommerce, insurance, legal, real_estate, professional_services, general), "
+    "primary_pain (one of: support_overflow, doc_overload, lead_chaos, ops_drift, content_grind, other), "
+    "pain_detail, target_outcome, timeline (one of: 14_days, 30_days, 60_days, 90_plus). "
+    "Use null when unclear. Be lenient — operators speak loose. "
+    "If the message says nothing about lighthouse / case-study / pilot / demo — set name=null to signal not-an-application."
+)
+
+
+async def _parse_inbound_to_app(text: str, sender_id: str) -> dict:
+    session = str(uuid.uuid4())
+    chat = _llm(session, SMS_PARSE_SYS, "anthropic")
+    raw = []
+    async for ev in chat.stream_message(UserMessage(text=text)):
+        if isinstance(ev, TextDelta): raw.append(ev.content)
+        elif isinstance(ev, StreamDone): break
+    try:
+        parsed = json.loads(_strip_json("".join(raw)))
+    except Exception:
+        parsed = {}
+    return parsed
+
+
+@api.post("/twilio/sms", response_class=PlainTextResponse)
+async def twilio_sms_inbound(request: Request):
+    """Inbound SMS webhook. Configure in Twilio console → SMS handler URL."""
+    if not MessagingResponse:
+        raise HTTPException(500, "Twilio SDK not installed")
+    form = await request.form()
+    from_number = form.get("From", "")
+    body = (form.get("Body", "") or "").strip()
+    log.info(f"SMS in from {from_number}: {body[:80]}")
+
+    parsed = await _parse_inbound_to_app(body, from_number)
+    reply = MessagingResponse()
+
+    if not parsed or not parsed.get("name"):
+        reply.message(
+            "JADE OS · Lighthouse program. Text APPLY with: your name, company, role, industry, the pain you want solved. "
+            "Or apply at jadeos.ai/lighthouse — JADE will score it live."
+        )
+        await db.sms_inbound.insert_one({
+            "id": str(uuid.uuid4()), "from_number": from_number, "body": body[:1000],
+            "matched": False, "created_at": _utcnow_iso(),
+        })
+        return PlainTextResponse(content=str(reply), media_type="application/xml")
+
+    # Best-effort: build a LighthouseApplication. Email/phone from Twilio number.
+    body_dict = {
+        "name": parsed.get("name") or "Unknown",
+        "title": parsed.get("title") or "—",
+        "email": f"sms+{from_number.lstrip('+')}@jadeos.ai",
+        "phone": from_number,
+        "company": parsed.get("company") or "Unknown",
+        "industry": parsed.get("industry") or "general",
+        "company_size": "11-50",
+        "primary_pain": parsed.get("primary_pain") or "other",
+        "pain_detail": parsed.get("pain_detail") or body[:500],
+        "target_outcome": parsed.get("target_outcome") or "—",
+        "timeline": parsed.get("timeline") or "30_days",
+        "decision_authority": "decision_maker",
+        "budget_band": "1500_4500",
+        "case_study_consent": True,  # implied by texting in
+        "logo_consent": False,
+        "quote_consent": False,
+        "metrics_consent": False,
+    }
+    app_doc = LighthouseApplication(**body_dict)
+    qual = await _score_lighthouse(app_doc.model_dump())
+    app_doc.score = qual.get("score"); app_doc.tier = qual.get("tier")
+    app_doc.rationale = qual.get("rationale"); app_doc.next_action = qual.get("next_action")
+    app_doc.green_flags = qual.get("green_flags") or []; app_doc.red_flags = qual.get("red_flags") or []
+    if app_doc.tier == "hot": app_doc.status = "screening"
+    app_doc.notes = f"[SMS · {from_number}] {body[:400]}"
+    await db.lighthouse_applications.insert_one(app_doc.model_dump())
+    await _log_run("qualify_lead", "anthropic", DEFAULT_MODELS["anthropic"], f"[sms-lighthouse] {body[:200]}", json.dumps(qual)[:500])
+    await db.sms_inbound.insert_one({
+        "id": str(uuid.uuid4()), "from_number": from_number, "body": body[:1000],
+        "matched": True, "application_id": app_doc.id, "created_at": _utcnow_iso(),
+    })
+
+    confirm = f"Locked in, operator. JADE scored you {app_doc.score}/100 ({(app_doc.tier or 'pending').upper()}). " + (
+        "Hot fit — we'll call within 48h." if app_doc.tier == "hot"
+        else "We'll review and reach out."
+    )
+    reply.message(confirm)
+    return PlainTextResponse(content=str(reply), media_type="application/xml")
+
+
+@api.post("/twilio/voice", response_class=PlainTextResponse)
+async def twilio_voice_inbound(request: Request):
+    """Inbound voice call. Greets caller and gathers speech (lighthouse intake)."""
+    if not VoiceResponse:
+        raise HTTPException(500, "Twilio SDK not installed")
+    resp = VoiceResponse()
+    resp.say(
+        "Welcome to JADE OS, the AI agent platform for Minneapolis operators. "
+        "After the tone, tell me your name, company, role, your industry, "
+        "and the workflow you want JADE to automate. You have one minute.",
+        voice="Polly.Matthew-Neural",
+    )
+    base = str(request.base_url).rstrip("/")
+    gather = Gather(
+        input="speech",
+        action=f"{base}/api/twilio/voice/process",
+        method="POST",
+        speech_timeout="auto",
+        timeout=8,
+        language="en-US",
+    )
+    resp.append(gather)
+    resp.say("Didn't catch that. Visit jadeos dot ai slash lighthouse, or text us back. Goodbye.")
+    return PlainTextResponse(content=str(resp), media_type="application/xml")
+
+
+@api.post("/twilio/voice/process", response_class=PlainTextResponse)
+async def twilio_voice_process(request: Request):
+    """Handles the <Gather> callback. Transcript arrives in SpeechResult."""
+    if not VoiceResponse:
+        raise HTTPException(500, "Twilio SDK not installed")
+    form = await request.form()
+    transcript = (form.get("SpeechResult", "") or "").strip()
+    from_number = form.get("From", "")
+    log.info(f"Voice transcript from {from_number}: {transcript[:120]}")
+
+    resp = VoiceResponse()
+    if not transcript:
+        resp.say("Didn't catch anything. Please visit jadeos dot ai slash lighthouse. Goodbye.", voice="Polly.Matthew-Neural")
+        return PlainTextResponse(content=str(resp), media_type="application/xml")
+
+    parsed = await _parse_inbound_to_app(transcript, from_number)
+    if not parsed or not parsed.get("name"):
+        resp.say(
+            "Couldn't parse a complete application. Visit jadeos dot ai slash lighthouse, or text us. Goodbye.",
+            voice="Polly.Matthew-Neural",
+        )
+        await db.voice_calls.insert_one({
+            "id": str(uuid.uuid4()), "from_number": from_number, "transcript": transcript[:2000],
+            "matched": False, "created_at": _utcnow_iso(),
+        })
+        return PlainTextResponse(content=str(resp), media_type="application/xml")
+
+    body_dict = {
+        "name": parsed.get("name") or "Unknown",
+        "title": parsed.get("title") or "—",
+        "email": f"voice+{from_number.lstrip('+')}@jadeos.ai",
+        "phone": from_number,
+        "company": parsed.get("company") or "Unknown",
+        "industry": parsed.get("industry") or "general",
+        "company_size": "11-50",
+        "primary_pain": parsed.get("primary_pain") or "other",
+        "pain_detail": parsed.get("pain_detail") or transcript[:500],
+        "target_outcome": parsed.get("target_outcome") or "—",
+        "timeline": parsed.get("timeline") or "30_days",
+        "decision_authority": "decision_maker",
+        "budget_band": "1500_4500",
+        "case_study_consent": True,
+        "logo_consent": False, "quote_consent": False, "metrics_consent": False,
+    }
+    app_doc = LighthouseApplication(**body_dict)
+    qual = await _score_lighthouse(app_doc.model_dump())
+    app_doc.score = qual.get("score"); app_doc.tier = qual.get("tier")
+    app_doc.rationale = qual.get("rationale"); app_doc.next_action = qual.get("next_action")
+    app_doc.green_flags = qual.get("green_flags") or []; app_doc.red_flags = qual.get("red_flags") or []
+    if app_doc.tier == "hot": app_doc.status = "screening"
+    app_doc.notes = f"[VOICE · {from_number}] {transcript[:600]}"
+    await db.lighthouse_applications.insert_one(app_doc.model_dump())
+    await _log_run("qualify_lead", "anthropic", DEFAULT_MODELS["anthropic"], f"[voice-lighthouse] {transcript[:200]}", json.dumps(qual)[:500])
+    await db.voice_calls.insert_one({
+        "id": str(uuid.uuid4()), "from_number": from_number, "transcript": transcript[:2000],
+        "matched": True, "application_id": app_doc.id, "created_at": _utcnow_iso(),
+    })
+
+    score_text = "ninety five" if (app_doc.score or 0) >= 90 else "warm" if (app_doc.tier == "warm") else "captured"
+    resp.say(
+        f"Locked in. JADE scored you {score_text}. " + (
+            "Hot fit. Expect a call within forty eight hours." if app_doc.tier == "hot"
+            else "We'll review and reach out. Goodbye."
+        ),
+        voice="Polly.Matthew-Neural",
+    )
+    return PlainTextResponse(content=str(resp), media_type="application/xml")
+
+
+@api.get("/twilio/inbound")
+async def twilio_inbound_list(_: str = Depends(require_admin)):
+    sms = await db.sms_inbound.find({}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
+    calls = await db.voice_calls.find({}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
+    return {
+        "sms": sms, "calls": calls,
+        "configured": _twilio_configured(),
+        "phone": TWILIO_PHONE_NUMBER if _twilio_configured() else None,
+    }
+
+
+# ============================================================
+# P2 · Stripe Customer Portal
+# ============================================================
+class PortalSessionRequest(BaseModel):
+    email: EmailStr
+    return_url: str
+
+
+@api.post("/billing/portal-session")
+async def billing_portal_session(body: PortalSessionRequest):
+    """Create a Stripe Customer Portal session so a customer can self-serve subscription mgmt."""
+    if not STRIPE_API_KEY:
+        raise HTTPException(500, "Stripe not configured")
+    import stripe
+    stripe.api_key = STRIPE_API_KEY
+    # Find or create a Stripe customer by email
+    try:
+        customers = stripe.Customer.list(email=body.email, limit=1).data
+        if customers:
+            cust = customers[0]
+        else:
+            cust = stripe.Customer.create(email=body.email)
+        session = stripe.billing_portal.Session.create(
+            customer=cust.id,
+            return_url=body.return_url,
+        )
+        return {"url": session.url}
+    except Exception as e:
+        log.exception("portal session failed")
+        raise HTTPException(500, str(e))
+
+
+# ============================================================
+# P2 · Per-customer hard token caps
+# ============================================================
+class TokenBudgetUpdate(BaseModel):
+    email: EmailStr
+    monthly_token_budget: int
+
+
+@api.patch("/orgs/budget")
+async def update_org_budget(body: TokenBudgetUpdate, _: str = Depends(require_admin)):
+    res = await db.orgs.update_one(
+        {"email": body.email},
+        {"$set": {"monthly_token_budget": body.monthly_token_budget, "updated_at": _utcnow_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Org not found")
+    return {"ok": True}
+
+
+async def _check_token_budget(email: Optional[str]) -> tuple[bool, dict]:
+    """Returns (allowed, info). If email is None — allowed. Otherwise checks usage vs cap."""
+    if not email:
+        return True, {"unlimited": True}
+    org = await db.orgs.find_one({"email": email}, {"_id": 0})
+    if not org:
+        return True, {"no_org": True}
+    cap = org.get("monthly_token_budget", 2_000_000)
+    # Estimate usage from this month's agent runs (4 chars/token)
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    cursor = db.agent_runs.aggregate([
+        {"$match": {"created_at": {"$gte": month_start}}},
+        {"$project": {"n": {"$add": [
+            {"$strLenCP": {"$ifNull": ["$input_preview", ""]}},
+            {"$strLenCP": {"$ifNull": ["$output_preview", ""]}},
+        ]}}},
+        {"$group": {"_id": None, "total": {"$sum": "$n"}}},
+    ])
+    used_chars = 0
+    async for d in cursor:
+        used_chars = d.get("total", 0)
+    used_tokens = used_chars // 4
+    return used_tokens < cap, {"used_tokens": used_tokens, "cap": cap}
+
+
+@api.get("/orgs/budget-check")
+async def org_budget_check(email: EmailStr):
+    allowed, info = await _check_token_budget(email)
+    return {"allowed": allowed, **info}
+
+
+# ============================================================
+# P3 · Public Playbook Builder
+# ============================================================
+class CustomerPlaybookCreate(BaseModel):
+    name: str
+    industry: str = "general"
+    description: Optional[str] = None
+    steps: List[PlaybookStep] = []
+    owner_email: EmailStr
+
+
+@api.post("/playbooks/customer", response_model=Playbook)
+async def customer_playbook_create(body: CustomerPlaybookCreate):
+    """Customers can build their own playbooks. Slug is auto-generated; org-scoped."""
+    slug_base = body.name.lower().replace(" ", "_").replace("-", "_")
+    slug_base = "".join(c for c in slug_base if c.isalnum() or c == "_")[:40] or "playbook"
+    # Ensure uniqueness
+    slug = slug_base
+    i = 1
+    while await db.playbooks.find_one({"slug": slug}):
+        i += 1
+        slug = f"{slug_base}_{i}"
+    pb = Playbook(slug=slug, industry=body.industry, name=body.name, description=body.description, steps=body.steps)
+    doc = pb.model_dump()
+    doc["owner_email"] = body.owner_email
+    await db.playbooks.insert_one(doc)
+    return pb
+
+
+@api.get("/playbooks/by-owner")
+async def playbooks_by_owner(email: EmailStr):
+    docs = await db.playbooks.find({"owner_email": email}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return docs
+
+
+# ============================================================
+# P3 · Multi-user org roles
+# ============================================================
+class OrgMember(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    org_email: EmailStr  # the org's primary contact email
+    member_email: EmailStr
+    name: Optional[str] = None
+    role: Literal["owner", "admin", "member", "viewer"] = "member"
+    created_at: str = Field(default_factory=_utcnow_iso)
+
+
+class OrgMemberCreate(BaseModel):
+    org_email: EmailStr
+    member_email: EmailStr
+    name: Optional[str] = None
+    role: Literal["owner", "admin", "member", "viewer"] = "member"
+
+
+@api.post("/orgs/members", response_model=OrgMember)
+async def org_member_add(body: OrgMemberCreate, _: str = Depends(require_admin)):
+    m = OrgMember(**body.model_dump())
+    await db.org_members.update_one(
+        {"org_email": m.org_email, "member_email": m.member_email},
+        {"$set": m.model_dump()},
+        upsert=True,
+    )
+    return m
+
+
+@api.get("/orgs/members", response_model=List[OrgMember])
+async def org_members_list(org_email: Optional[EmailStr] = None, _: str = Depends(require_admin)):
+    q = {"org_email": org_email} if org_email else {}
+    docs = await db.org_members.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return [OrgMember(**d) for d in docs]
+
+
+@api.delete("/orgs/members/{member_id}")
+async def org_member_remove(member_id: str, _: str = Depends(require_admin)):
+    res = await db.org_members.delete_one({"id": member_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+# ============================================================
+# P3 · Demo Reel Embed
+# ============================================================
+@api.get("/embed/reel-config")
+async def embed_reel_config(industry: Optional[str] = None, scene: Optional[int] = None):
+    """Returns config for the embeddable reel. Used by the iframe widget."""
+    return {
+        "industry": industry,
+        "starting_scene": scene or 0,
+        "autoplay": True,
+        "branded": True,
+        "version": 1,
     }
 
 

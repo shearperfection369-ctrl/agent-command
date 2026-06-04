@@ -232,6 +232,13 @@ export default function DemoReel() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button data-testid="reel-embed-btn" onClick={() => {
+                const code = `<iframe src="${window.location.origin}/embed/reel?industry=${scene.industry}&scene=${sceneIdx}" width="100%" height="520" style="border:0;border-radius:0"></iframe>`;
+                navigator.clipboard.writeText(code);
+                toast.success("Embed snippet copied — paste into any site");
+              }} className="btn-ghost text-xs inline-flex items-center gap-2">
+                ⧉ COPY EMBED
+              </button>
               <button data-testid="reel-autoplay-btn" onClick={() => setAutoplay((x) => !x)} className="btn-ghost text-xs inline-flex items-center gap-2">
                 {autoplay ? <><Pause size={14} weight="bold" /> PAUSE</> : <><Play size={14} weight="bold" /> AUTOPLAY</>}
               </button>

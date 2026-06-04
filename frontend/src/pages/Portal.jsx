@@ -58,6 +58,24 @@ export default function Portal() {
                 <Stat k="MONTHLY BUDGET" v={`${(data.org.monthly_token_budget / 1000).toLocaleString()}k TOK`} c="#ff3b8a" />
               </div>
 
+              <div className="deck-card p-6 relative">
+                <CornerBrackets />
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <button data-testid="portal-manage-btn" onClick={async () => {
+                    try {
+                      const { data: s } = await api.post("/billing/portal-session", { email, return_url: window.location.origin + "/portal" });
+                      window.location.href = s.url;
+                    } catch (err) {
+                      toast.error(err?.response?.data?.detail || "Stripe portal unavailable");
+                    }
+                  }} className="btn-jade inline-flex items-center justify-center gap-2">
+                    MANAGE SUBSCRIPTION · STRIPE
+                  </button>
+                  <a data-testid="portal-build-playbook-btn" href="/playbooks/new" className="btn-ghost text-center">BUILD A PLAYBOOK</a>
+                  <a data-testid="portal-console-btn" href="/demo" className="btn-ghost text-center">OPEN CONSOLE</a>
+                </div>
+              </div>
+
               <div className="deck-card relative" data-testid="portal-runs">
                 <CornerBrackets />
                 <div className="p-6 border-b border-white/10 mono-label text-[#ccff00]">RECENT AGENT RUNS · TAPE</div>

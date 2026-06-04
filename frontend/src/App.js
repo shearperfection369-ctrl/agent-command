@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -16,12 +16,25 @@ import Billing from "@/pages/Billing";
 import BillingSuccess from "@/pages/BillingSuccess";
 import Portal from "@/pages/Portal";
 import Lighthouse from "@/pages/Lighthouse";
+import PlaybookBuilder from "@/pages/PlaybookBuilder";
+import EmbedReel from "@/pages/EmbedReel";
+
+function Chrome({ children }) {
+  const { pathname } = useLocation();
+  const bare = pathname.startsWith("/embed/");
+  return (
+    <>
+      {!bare && <Nav />}
+      {children}
+      {!bare && <Footer />}
+    </>
+  );
+}
 
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <Nav />
         <Toaster
           position="top-right"
           theme="dark"
@@ -36,23 +49,26 @@ function App() {
             },
           }}
         />
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/demo" element={<AgentDemo />} />
-          <Route path="/reel" element={<DemoReel />} />
-          <Route path="/deck" element={<PitchDeck />} />
-          <Route path="/plan" element={<BusinessPlan />} />
-          <Route path="/launch" element={<LaunchKit />} />
-          <Route path="/cases" element={<CaseStudiesIndex />} />
-          <Route path="/cases/:slug" element={<CaseStudyDetail />} />
-          <Route path="/billing" element={<Billing />} />
-          <Route path="/billing/success" element={<BillingSuccess />} />
-          <Route path="/portal" element={<Portal />} />
-          <Route path="/lighthouse" element={<Lighthouse />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/admin" element={<Dashboard />} />
-        </Routes>
-        <Footer />
+        <Chrome>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/demo" element={<AgentDemo />} />
+            <Route path="/reel" element={<DemoReel />} />
+            <Route path="/deck" element={<PitchDeck />} />
+            <Route path="/plan" element={<BusinessPlan />} />
+            <Route path="/launch" element={<LaunchKit />} />
+            <Route path="/cases" element={<CaseStudiesIndex />} />
+            <Route path="/cases/:slug" element={<CaseStudyDetail />} />
+            <Route path="/billing" element={<Billing />} />
+            <Route path="/billing/success" element={<BillingSuccess />} />
+            <Route path="/portal" element={<Portal />} />
+            <Route path="/lighthouse" element={<Lighthouse />} />
+            <Route path="/playbooks/new" element={<PlaybookBuilder />} />
+            <Route path="/embed/reel" element={<EmbedReel />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin" element={<Dashboard />} />
+          </Routes>
+        </Chrome>
       </BrowserRouter>
     </div>
   );

@@ -178,6 +178,28 @@ export default function Lighthouse() {
               </div>
             ))}
           </div>
+
+          {/* Alt channels */}
+          <div className="mt-12 deck-card p-7 relative" data-testid="lh-alt-channels">
+            <CornerBrackets />
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div>
+                <div className="mono-label text-[#ccff00] mb-2">APPLY THE WAY YOU WORK</div>
+                <h3 className="font-display font-bold text-white text-2xl tracking-tight">Three doors.<br /><span className="accent-cyan">Same room.</span></h3>
+                <p className="text-sm text-white/60 mt-4 leading-relaxed">JADE handles inbound SMS and voice the same way it handles the form below. Pick your channel.</p>
+              </div>
+              <div className="border-l-2 border-[#00ffff] pl-6">
+                <div className="mono-label text-[#00ffff] mb-2">TEXT US</div>
+                <div className="font-display font-black text-white text-3xl tracking-tighter mt-2">+1 (612)<br />555-0117</div>
+                <p className="text-xs text-white/55 mt-3 font-mono-tech">Text your name, company, role, industry, and the pain you want solved. JADE scores you live and replies.</p>
+              </div>
+              <div className="border-l-2 border-[#7c5cff] pl-6">
+                <div className="mono-label text-[#7c5cff] mb-2">CALL US</div>
+                <div className="font-display font-black text-white text-3xl tracking-tighter mt-2">+1 (612)<br />555-0117</div>
+                <p className="text-xs text-white/55 mt-3 font-mono-tech">JADE picks up. Tell her about your workflow for 60 seconds. Speech → transcript → application → score, all in one call.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
