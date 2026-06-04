@@ -1,24 +1,60 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, Truck, Lightning, Brain, Files, EnvelopeSimple, GearSix, Headset, Target, MapPin, ChartLineUp, Lock, Check, Code } from "@phosphor-icons/react";
+import {
+  ArrowRight, Lightning, Files, EnvelopeSimple, GearSix, Headset, Target,
+  MapPin, Lock, Check, ChartLineUp, Robot, Briefcase, Truck, Heartbeat,
+  Buildings, ShoppingBag, Stethoscope, Gavel, Wrench, Code,
+} from "@phosphor-icons/react";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 
 const AGENTS = [
-  { id: "support", label: "TIER-1 SUPPORT", color: "#ccff00", icon: Headset, title: "Customer Support Agent", body: "Tier-1 ticket triage, FAQ routing, escalation logic. Drains the queue while your humans sleep." },
-  { id: "sales", label: "LEAD QUAL", color: "#00ffff", icon: Target, title: "Sales Qualification Agent", body: "Auto-score by firmographics + behavior. Routes hot leads. Books meetings. Kills cold ones." },
-  { id: "extract", label: "DATA EXTRACTION", color: "#7c5cff", icon: Files, title: "Document & Data Extraction", body: "BOLs, rate cons, invoices, manifests, intake forms — into clean structured JSON. PDF or paste." },
-  { id: "ops", label: "OPS AUTOMATION", color: "#ff3b8a", icon: GearSix, title: "Operations & Workflow Agent", body: "Watches systems. Triggers actions. Walks decision trees. Production scheduling, order routing, defect calls." },
-  { id: "content", label: "OUTREACH", color: "#ccff00", icon: EnvelopeSimple, title: "Outreach & Content Agent", body: "Personalized follow-ups, carrier emails, product copy. Hits the inbox in your voice, not ChatGPT's." },
-  { id: "freight", label: "FLAGSHIP · MPLS", color: "#00ffff", icon: Truck, title: "Freight Broker Co-Pilot", body: "Load matching, carrier comms, lane analytics. Built for 3PLs and brokers in the upper Midwest." },
+  { id: "support", label: "TIER-1 SUPPORT", color: "#ccff00", icon: Headset, title: "Customer Support Agent",
+    body: "Auto-triage incoming tickets, route to the right team, draft responses in your brand voice. Sentiment + priority on every ticket.",
+    useCase: "Drains the queue while your humans sleep." },
+  { id: "sales", label: "LEAD QUALIFICATION", color: "#00ffff", icon: Target, title: "Sales Qualification Agent",
+    body: "Score every inbound lead 0–100. Auto-tier hot / warm / cold. Recommend next action. Book the meeting.",
+    useCase: "Your AE team stops wasting hours on tire-kickers." },
+  { id: "extract", label: "DATA EXTRACTION", color: "#7c5cff", icon: Files, title: "Document & Data Extraction",
+    body: "Parse BOLs, invoices, intake forms, EOBs, POs, contracts, claims into clean structured JSON. Detects document type automatically.",
+    useCase: "Kill rekey errors. Eliminate the data-entry function." },
+  { id: "ops", label: "OPS AUTOMATION", color: "#ff3b8a", icon: GearSix, title: "Operations & Workflow Agent",
+    body: "Monitors systems. Triggers actions. Walks decision trees. Production scheduling, order routing, defect classification, escalations.",
+    useCase: "Replaces the 'who-should-I-call-about-this' Slack thread." },
+  { id: "content", label: "OUTREACH · CONTENT", color: "#ccff00", icon: EnvelopeSimple, title: "Outreach & Content Agent",
+    body: "Personalized cold/follow-up emails, product copy, internal updates. Tone matches your industry — operator-blunt or healthcare-courteous.",
+    useCase: "Hit the inbox in your voice. Not ChatGPT's." },
+  { id: "chat", label: "OPS CO-PILOT", color: "#00ffff", icon: Robot, title: "On-Call Ops Co-Pilot",
+    body: "A trained-on-your-vertical chat assistant for your team. Answers tier-1 questions, drafts plans, summarizes data, never sleeps.",
+    useCase: "Like having a senior ops lead on Slack 24/7." },
 ];
 
-const TARGETS = [
-  { vertical: "FREIGHT & 3PL", names: ["C.H. Robinson", "Coyote", "Werner", "Bay & Bay", "Forward Air", "Allen Lund"] },
-  { vertical: "TECH & SAAS", names: ["Securian", "Ecolab", "Best Buy", "Hormel", "Cargill"] },
-  { vertical: "HEALTHCARE", names: ["UnitedHealth · Optum", "Allina", "HealthPartners", "Mayo (Rochester)"] },
-  { vertical: "MANUFACTURING", names: ["Pentair", "Emerson", "3M", "Donaldson", "Polaris"] },
+const VERTICALS = [
+  { id: "freight", icon: Truck, color: "#ccff00", name: "Freight & Logistics", who: "3PLs · Freight brokers · Carriers",
+    examples: ["C.H. Robinson", "Coyote", "Bay & Bay", "Werner", "Forward Air"],
+    wins: ["Carrier outreach auto-drafted", "BOL/load posting extraction", "Dispatch tier-1 triage"] },
+  { id: "manufacturing", icon: Wrench, color: "#00ffff", name: "Manufacturing", who: "Industrial · OEMs · Job shops",
+    examples: ["Pentair", "Emerson", "3M", "Donaldson", "Polaris"],
+    wins: ["PO + work-order extraction", "Defect & line-down escalation", "Vendor follow-up automation"] },
+  { id: "healthcare", icon: Stethoscope, color: "#7c5cff", name: "Healthcare", who: "Health systems · Clinics · Payers",
+    examples: ["UnitedHealth · Optum", "Allina", "HealthPartners", "Mayo Clinic"],
+    wins: ["Intake form + EOB parsing", "Appointment reminders + reroutes", "Patient inquiry triage · PHI-safe"] },
+  { id: "saas", icon: Code, color: "#ff3b8a", name: "SaaS & Tech", who: "B2B SaaS · Platforms · Mid-market",
+    examples: ["Securian", "Best Buy", "Bright Health", "Code42", "Jamf"],
+    wins: ["Tier-1 support deflection", "Inbound lead scoring + routing", "Renewal + expansion outreach"] },
+  { id: "ecommerce", icon: ShoppingBag, color: "#ccff00", name: "E-Commerce & Retail", who: "DTC · Marketplaces · Omnichannel",
+    examples: ["Best Buy", "Target.com", "Faribault Mill", "Askov Finlayson"],
+    wins: ["Order / return triage", "VIP win-back personalization", "Product copy at scale"] },
+  { id: "insurance", icon: Briefcase, color: "#00ffff", name: "Insurance", who: "Carriers · MGAs · Agencies",
+    examples: ["Securian", "Travelers · St. Paul", "Allianz Life", "Federated"],
+    wins: ["FNOL / claim form extraction", "Reserve guidance assist", "Insured status updates"] },
+  { id: "legal", icon: Gavel, color: "#7c5cff", name: "Legal & Compliance", who: "Firms · In-house · Boutiques",
+    examples: ["Faegre Drinker", "Robins Kaplan", "Stinson", "Dorsey"],
+    wins: ["Client intake + conflict check", "Discovery doc extraction", "Polite drafting in firm voice"] },
+  { id: "real_estate", icon: Buildings, color: "#ff3b8a", name: "Real Estate", who: "CRE · Property mgmt · Brokerage",
+    examples: ["Cushman & Wakefield · MSP", "Colliers · MSP", "Ryan Companies"],
+    wins: ["Lease summary extraction", "Maintenance ticket triage", "Tenant communication drafts"] },
 ];
 
 export default function Landing() {
@@ -51,16 +87,11 @@ export default function Landing() {
       <section className="relative overflow-hidden bg-console">
         <div className="absolute inset-0 grid-bg pointer-events-none" />
         <div className="absolute inset-0 scanlines pointer-events-none" />
-        {/* Lime curtain on the right like the brand poster */}
-        <div
-          className="absolute top-0 bottom-0 right-0 w-[42%] hidden lg:block opacity-95"
-          style={{
-            background: "linear-gradient(110deg, transparent 0%, rgba(204,255,0,0.55) 35%, #b5e600 100%)",
-          }}
-        />
+        <div className="absolute top-0 bottom-0 right-0 w-[42%] hidden lg:block opacity-95"
+          style={{ background: "linear-gradient(110deg, transparent 0%, rgba(204,255,0,0.55) 35%, #b5e600 100%)" }} />
         <div className="absolute top-0 bottom-0 right-0 w-[42%] hidden lg:block grid-bg-tight pointer-events-none" />
 
-        <div className="relative max-w-[1400px] mx-auto px-6 lg:px-10 pt-20 lg:pt-32 pb-24 lg:pb-40">
+        <div className="relative max-w-[1400px] mx-auto px-6 lg:px-10 pt-20 lg:pt-28 pb-24 lg:pb-32">
           <div className="bracket-frame p-6 lg:p-10 max-w-3xl reveal">
             <div className="flex items-center gap-3 mb-8">
               <span className="dot" />
@@ -69,33 +100,25 @@ export default function Landing() {
             <h1 className="font-display font-black text-white text-[64px] sm:text-[88px] lg:text-[120px] leading-[0.85] tracking-tighter glow-lime">
               JADE<br />OS.
             </h1>
-            <p className="mt-8 text-xl sm:text-2xl text-white/85 max-w-xl font-display tracking-tight">
-              AI agents that <span className="accent-cyan">run the dock door</span> — freight, support, ops, sales.
+            <p className="mt-8 text-xl sm:text-2xl text-white/85 max-w-2xl font-display tracking-tight">
+              Universal AI agents that <span className="accent-cyan">run the business</span> — every industry, every team, one console.
             </p>
-            <p className="mt-4 text-sm text-white/55 max-w-lg leading-relaxed">
-              Production-grade agents for Minneapolis operators. Built on Claude, GPT, and a freight-trained playbook. No demo theater. Real loads. Real tickets. Real revenue.
+            <p className="mt-4 text-sm text-white/55 max-w-xl leading-relaxed">
+              Six production-grade agents — support, sales-qual, data extraction, ops automation, outreach, and an ops co-pilot — tuned to your vertical out of the box. Built on Claude Sonnet 4.5 and GPT-5.2. No prompt engineering required.
             </p>
             <div className="mt-10 flex flex-wrap gap-3">
               <Link to="/demo" data-testid="hero-cta-demo" className="btn-jade inline-flex items-center gap-2">
-                PASTE A LOAD · WATCH JADE WORK <ArrowRight size={16} weight="bold" />
+                TRY ANY AGENT · ANY INDUSTRY <ArrowRight size={16} weight="bold" />
               </Link>
               <a href="#book" data-testid="hero-cta-book" className="btn-ghost">BOOK A 20-MIN OPS REVIEW</a>
             </div>
 
             <div className="mt-12 flex flex-wrap gap-2">
-              <span className="chip" data-testid="hero-chip-1">AGENTIC · CLAUDE 4.5</span>
-              <span className="chip chip-cyan" data-testid="hero-chip-2">FREIGHT · 3PL · MFG · HEALTH</span>
-              <span className="chip chip-violet" data-testid="hero-chip-3">SOC2 · OPS-GRADE</span>
+              <span className="chip" data-testid="hero-chip-1">10+ INDUSTRIES · TUNED</span>
+              <span className="chip chip-cyan" data-testid="hero-chip-2">CLAUDE 4.5 + GPT-5.2</span>
+              <span className="chip chip-violet" data-testid="hero-chip-3">SOC2 · HIPAA-READY</span>
             </div>
           </div>
-
-          {/* Diagonal data line — purely decorative */}
-          <svg className="hidden lg:block absolute right-[6%] bottom-[12%] w-[420px]" viewBox="0 0 420 180" fill="none">
-            <polyline points="0,140 80,90 160,120 240,40 320,80 420,20" stroke="#02030a" strokeWidth="2" strokeOpacity="0.6" />
-            {[[0,140],[80,90],[160,120],[240,40],[320,80],[420,20]].map(([x,y], i) => (
-              <circle key={i} cx={x} cy={y} r="4" fill="#02030a" />
-            ))}
-          </svg>
         </div>
 
         {/* Ticker */}
@@ -103,13 +126,13 @@ export default function Landing() {
           <div className="ticker-track mono-label text-white/40 whitespace-nowrap">
             {[...Array(2)].map((_, k) => (
               <div key={k} className="flex gap-14">
-                <span className="text-[#ccff00]">▲ LOAD MATCH 99.2%</span>
-                <span>CARRIERS RESPONDED · 1,418</span>
-                <span className="text-[#00ffff]">▲ DISPATCHER HOURS RECLAIMED · 3,902</span>
-                <span>BOLS PARSED · 21,604</span>
-                <span className="text-[#7c5cff]">▲ TICKETS RESOLVED · 6,330</span>
-                <span>AVG TIER-1 RESOLUTION · 38s</span>
-                <span className="text-[#ff3b8a]">▲ LEADS SCORED · 1,121</span>
+                <span className="text-[#ccff00]">▲ TICKETS RESOLVED · 6,330</span>
+                <span>DOCS PARSED · 21,604</span>
+                <span className="text-[#00ffff]">▲ LEADS SCORED · 1,121</span>
+                <span>EMAILS DRAFTED · 4,902</span>
+                <span className="text-[#7c5cff]">▲ HOURS RECLAIMED · 3,902</span>
+                <span>INDUSTRIES SHIPPED · 11</span>
+                <span className="text-[#ff3b8a]">▲ AVG TIER-1 RESOLUTION · 38s</span>
               </div>
             ))}
           </div>
@@ -122,10 +145,10 @@ export default function Landing() {
           <SectionLabel idx={1} color="#ccff00">THE FLEET</SectionLabel>
           <div className="grid lg:grid-cols-2 gap-10 mb-12">
             <h2 className="font-display font-bold text-white text-4xl sm:text-5xl tracking-tight">
-              Six agents.<br />One operator console.
+              Six agents.<br />Any industry.<br /><span className="accent-cyan">One console.</span>
             </h2>
             <p className="text-white/65 leading-relaxed mt-2 max-w-xl">
-              JADE OS wraps Claude Sonnet 4.5, GPT-5.2, and a freight-trained system prompt into agents your dispatchers, ops leads, and revenue team actually use. <span className="accent-cyan">No prompt engineering required.</span>
+              Every agent ships pre-tuned for freight, healthcare, SaaS, manufacturing, e-commerce, insurance, legal, real estate, and pro services. Same console — different lexicon, different playbooks, same operator-grade output.
             </p>
           </div>
 
@@ -140,7 +163,11 @@ export default function Landing() {
                     <span className="mono-label" style={{ color: a.color }}>{a.label}</span>
                   </div>
                   <h3 className="font-display font-bold text-white text-xl mb-2">{a.title}</h3>
-                  <p className="text-sm text-white/60 leading-relaxed">{a.body}</p>
+                  <p className="text-sm text-white/65 leading-relaxed">{a.body}</p>
+                  <div className="mt-5 pt-4 border-t border-white/5">
+                    <div className="mono-label text-white/40 mb-1">RESULT</div>
+                    <div className="accent-cyan text-sm">{a.useCase}</div>
+                  </div>
                 </div>
               );
             })}
@@ -148,38 +175,57 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============== TARGET ACCOUNTS ============== */}
+      {/* ============== INDUSTRIES (universal) ============== */}
       <section className="relative bg-console py-24 lg:py-32 px-6 lg:px-10 border-t border-white/5">
         <div className="max-w-[1400px] mx-auto">
-          <SectionLabel idx={2} color="#00ffff">TARGET MAP · MSP</SectionLabel>
-          <div className="grid lg:grid-cols-3 gap-12">
-            <div className="lg:col-span-1">
-              <h2 className="font-display font-bold text-white text-4xl tracking-tight mb-4">
-                Built for the<br />
-                <span className="accent-cyan text-4xl">Twin Cities ledger.</span>
+          <SectionLabel idx={2} color="#00ffff">VERTICALS · TUNED OUT OF THE BOX</SectionLabel>
+          <div className="grid lg:grid-cols-3 gap-12 mb-14">
+            <div className="lg:col-span-2">
+              <h2 className="font-display font-bold text-white text-4xl sm:text-5xl tracking-tight">
+                One platform.<br />
+                <span className="accent-cyan">Every industry in MSP.</span>
               </h2>
-              <p className="text-white/60 text-sm leading-relaxed">
-                Minneapolis runs on freight, healthcare, and quiet midwest manufacturers. JADE OS is calibrated for the workflows of operators here — not silicon-valley vibes.
+              <p className="mt-6 text-white/65 leading-relaxed max-w-2xl">
+                JADE OS isn't a freight tool with a SaaS wrapper, and it isn't a generic ChatGPT skin. Each agent loads a vertical lexicon, a per-industry document schema, and a tone profile calibrated for that industry's buyer. Switch verticals on the fly.
               </p>
-              <div className="mt-8 flex items-center gap-2 text-[#ccff00]">
-                <MapPin size={18} weight="bold" />
-                <span className="mono-label">44.97° N · 93.26° W</span>
-              </div>
             </div>
-            <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
-              {TARGETS.map((t, i) => (
-                <div key={t.vertical} data-testid={`target-${i}`} className="deck-card p-6 relative">
-                  <div className="mono-label text-[#ccff00] mb-4">{t.vertical}</div>
-                  <ul className="space-y-2">
-                    {t.names.map((n) => (
-                      <li key={n} className="font-mono-tech text-sm text-white/75 flex items-center gap-2">
-                        <span className="text-[#7c5cff]">▶</span> {n}
-                      </li>
-                    ))}
-                  </ul>
+            <div className="flex items-center gap-2 text-[#ccff00]">
+              <MapPin size={18} weight="bold" />
+              <span className="mono-label">44.97° N · 93.26° W</span>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {VERTICALS.map((v) => {
+              const Icon = v.icon;
+              return (
+                <div key={v.id} data-testid={`vertical-${v.id}`} className="deck-card p-6 relative">
+                  <CornerBrackets />
+                  <div className="flex items-center justify-between mb-4">
+                    <Icon size={26} weight="bold" style={{ color: v.color }} />
+                    <span className="mono-label" style={{ color: v.color }}>0{VERTICALS.indexOf(v) + 1}</span>
+                  </div>
+                  <h3 className="font-display font-bold text-white text-lg leading-tight">{v.name}</h3>
+                  <div className="mono-label text-white/40 mt-2">{v.who}</div>
+
+                  <div className="mt-5">
+                    <div className="mono-label text-white/45 mb-2">QUICK WINS</div>
+                    <ul className="space-y-1.5">
+                      {v.wins.map((w) => (
+                        <li key={w} className="text-xs text-white/75 leading-snug flex gap-2">
+                          <span style={{ color: v.color }}>▸</span>{w}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-5 pt-4 border-t border-white/5">
+                    <div className="mono-label text-white/40 mb-2">MSP TARGETS</div>
+                    <div className="font-mono-tech text-[11px] text-white/60 leading-relaxed">{v.examples.join(" · ")}</div>
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -190,10 +236,10 @@ export default function Landing() {
           <SectionLabel idx={3} color="#7c5cff">DEPLOYMENT TAPE</SectionLabel>
           <div className="grid lg:grid-cols-4 gap-6">
             {[
-              { n: "01", t: "PASTE", c: "#ccff00", b: "Drop a load posting, BOL, ticket, or lead form. JADE reads it raw — PDF, plain text, copy-paste from your TMS." },
-              { n: "02", t: "DECODE", c: "#00ffff", b: "Agents extract structured fields, score the lead, or draft the carrier outreach. You see the work as it runs." },
-              { n: "03", t: "REVIEW", c: "#7c5cff", b: "Human-in-the-loop approve / edit / kill. Confidence scores on every action. No silent rogue agents." },
-              { n: "04", t: "FIRE", c: "#ff3b8a", b: "Approved actions hit your email, CRM, TMS via webhook. JADE logs every move for audit." },
+              { n: "01", t: "PICK", c: "#ccff00", b: "Select your vertical and the agents you want. We pre-load the lexicon, schemas, and tone profile. Zero config." },
+              { n: "02", t: "FEED", c: "#00ffff", b: "Drop documents, tickets, leads, or transcripts. JADE reads raw — PDF, plain text, CSV, copy-paste from your stack." },
+              { n: "03", t: "REVIEW", c: "#7c5cff", b: "Human-in-the-loop approve / edit / kill. Confidence scores on every action. Full audit trail. Zero rogue agents." },
+              { n: "04", t: "FIRE", c: "#ff3b8a", b: "Approved actions hit your email, CRM, TMS, EMR, helpdesk via webhook. JADE logs every move. Ship today." },
             ].map((s) => (
               <div key={s.n} className="deck-card p-7 relative">
                 <CornerBrackets />
@@ -217,18 +263,15 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-5">
             {[
               { name: "DISPATCH", price: "$1,500", per: "/MO", c: "#ccff00",
-                feats: ["1 agent · Freight Co-Pilot OR Tier-1 Support", "Up to 500 runs / mo", "Slack + email delivery", "Email support · 1 business day"] },
+                feats: ["1 agent · any vertical", "Up to 500 runs / mo", "Slack + email delivery", "Email support · 1 business day"] },
               { name: "FLEET", price: "$4,500", per: "/MO", c: "#00ffff", featured: true,
-                feats: ["3 agents · pick any from the deck", "Up to 5,000 runs / mo", "Native CRM + TMS webhooks", "Dedicated Slack channel · same-day"] },
+                feats: ["3 agents · any verticals", "Up to 5,000 runs / mo", "Native CRM / TMS / EMR webhooks", "Dedicated Slack channel · same-day"] },
               { name: "VAULT", price: "Custom", per: "ANNUAL", c: "#7c5cff",
                 feats: ["Unlimited agents + custom builds", "On-prem / VPC deployment available", "SOC2 + BAA for healthcare", "Quarterly ops review · named engineer"] },
             ].map((t) => (
-              <div
-                key={t.name}
-                data-testid={`pricing-${t.name.toLowerCase()}`}
+              <div key={t.name} data-testid={`pricing-${t.name.toLowerCase()}`}
                 className={`relative p-8 ${t.featured ? "bg-[#0a0c18]" : "bg-[#06081a]"}`}
-                style={{ border: `1px solid ${t.featured ? t.c : "rgba(255,255,255,0.08)"}` }}
-              >
+                style={{ border: `1px solid ${t.featured ? t.c : "rgba(255,255,255,0.08)"}` }}>
                 {t.featured && <div className="absolute -top-3 left-6 px-2 py-1 bg-[#00ffff] text-[#02030a] mono-label font-bold">MOST FLEETS</div>}
                 <div className="mono-label" style={{ color: t.c }}>{t.name}</div>
                 <div className="mt-4 flex items-baseline gap-2">
@@ -258,7 +301,7 @@ export default function Landing() {
               ops review.
             </h2>
             <p className="mt-6 text-white/60 leading-relaxed max-w-md">
-              Tell us where your team bleeds hours. We come back inside 24 hours with a one-pager: which agent we'd ship first, expected ROI, and a fixed price.
+              Tell us where your team bleeds hours — in any industry. We come back inside 24 hours with a one-pager: which agent we'd ship first, expected ROI, and a fixed price.
             </p>
             <div className="mt-8 space-y-3 text-sm text-white/60">
               <div className="flex items-center gap-3"><Lightning size={16} className="text-[#ccff00]" weight="bold" /><span>Live demo on YOUR data</span></div>
@@ -270,23 +313,23 @@ export default function Landing() {
           <form onSubmit={submit} className="lg:col-span-3 deck-card p-8 lg:p-10 relative" data-testid="lead-form">
             <CornerBrackets />
             <div className="grid sm:grid-cols-2 gap-5">
-              <Field label="OPERATOR · NAME" testid="lead-name">
+              <Field label="OPERATOR · NAME">
                 <input data-testid="lead-input-name" className="input-tech" placeholder="Dana Bjornson"
                   value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </Field>
-              <Field label="WORK · EMAIL" testid="lead-email">
-                <input data-testid="lead-input-email" type="email" className="input-tech" placeholder="dana@northstarbroker.com"
+              <Field label="WORK · EMAIL">
+                <input data-testid="lead-input-email" type="email" className="input-tech" placeholder="dana@company.com"
                   value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </Field>
-              <Field label="COMPANY" testid="lead-company">
-                <input data-testid="lead-input-company" className="input-tech" placeholder="Northstar Broker"
+              <Field label="COMPANY">
+                <input data-testid="lead-input-company" className="input-tech" placeholder="Acme Industries"
                   value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
               </Field>
-              <Field label="PHONE · OPTIONAL" testid="lead-phone">
+              <Field label="PHONE · OPTIONAL">
                 <input data-testid="lead-input-phone" className="input-tech" placeholder="(612) 555-0117"
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </Field>
-              <Field label="VERTICAL" testid="lead-vertical">
+              <Field label="INDUSTRY">
                 <select data-testid="lead-input-vertical" className="input-tech"
                   value={form.vertical} onChange={(e) => setForm({ ...form, vertical: e.target.value })}>
                   <option value="freight_brokerage">Freight Brokerage / 3PL</option>
@@ -294,18 +337,22 @@ export default function Landing() {
                   <option value="manufacturing">Manufacturing</option>
                   <option value="healthcare">Healthcare</option>
                   <option value="saas">SaaS / Tech</option>
+                  <option value="ecommerce">E-Commerce / Retail</option>
+                  <option value="insurance">Insurance</option>
+                  <option value="legal">Legal</option>
                   <option value="real_estate">Real Estate / Property Mgmt</option>
-                  <option value="other">Other</option>
+                  <option value="professional_services">Professional Services / Agencies</option>
+                  <option value="general">Other / General</option>
                 </select>
               </Field>
-              <Field label="MONTHLY VOLUME" testid="lead-volume">
-                <input data-testid="lead-input-volume" className="input-tech" placeholder="~500 loads / mo · 1k tickets · etc."
+              <Field label="MONTHLY VOLUME">
+                <input data-testid="lead-input-volume" className="input-tech" placeholder="~500 tickets · 1k docs · 200 leads"
                   value={form.monthly_volume} onChange={(e) => setForm({ ...form, monthly_volume: e.target.value })} />
               </Field>
               <div className="sm:col-span-2">
-                <Field label="USE CASE · WHERE YOU'RE BLEEDING HOURS" testid="lead-use-case">
+                <Field label="USE CASE · WHERE YOU'RE BLEEDING HOURS">
                   <textarea data-testid="lead-input-use-case" rows="4" className="input-tech"
-                    placeholder="Carrier outreach takes 2 dispatchers all day. BOL data entry is killing margin. Tier-1 ticket flood."
+                    placeholder="Support queue overflowing. Manual data entry from PDFs. AEs drowning in unqualified leads."
                     value={form.use_case} onChange={(e) => setForm({ ...form, use_case: e.target.value })} />
                 </Field>
               </div>
@@ -323,9 +370,9 @@ export default function Landing() {
   );
 }
 
-function Field({ label, children, testid }) {
+function Field({ label, children }) {
   return (
-    <label className="block" data-testid={testid && `${testid}-label`}>
+    <label className="block">
       <span className="mono-label text-white/45 block mb-2">{label}</span>
       {children}
     </label>

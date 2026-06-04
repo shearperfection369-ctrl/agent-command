@@ -7,39 +7,39 @@ const PLAN_SECTIONS = [
   {
     n: "01", t: "EXECUTIVE SUMMARY", c: "#ccff00",
     paragraphs: [
-      "JADE OS is a productized AI-agent studio for Minneapolis operators — freight brokers, 3PLs, manufacturers, healthcare and SaaS ops teams. We wrap Claude Sonnet 4.5 and GPT-5.2 in vertical-tuned agents that handle Tier-1 support, sales qualification, document extraction, ops workflows, and outbound content.",
-      "We launch narrow: freight brokers and 3PLs in MSP, the founder's home vertical. One killer agent — load matching + carrier outreach — sold to 5 design partners at $3–4.5k/mo MRR inside 90 days. Then expand horizontally into adjacent verticals using the case studies as social proof.",
-      "Target: $500k ARR by month 18, profitability by month 12, with a 3-person founding team and zero outside capital.",
+      "JADE OS is a universal AI-agent platform for Minneapolis operators across freight, logistics, manufacturing, healthcare, SaaS, e-commerce, insurance, legal, real estate, and professional services. We wrap Claude Sonnet 4.5 and GPT-5.2 in six vertical-tuned agents that handle Tier-1 support, sales qualification, document extraction, ops workflows, outbound content, and on-call ops co-piloting.",
+      "We go to market with a horizontal product but a vertical sales motion: each industry buyer sees a tuned demo, a tuned schema, and a tuned voice on day one. We launch design partners in three verticals simultaneously — freight brokerage, healthcare admin, and SaaS support — picking up case studies in parallel so we never depend on any one industry's sales cycle.",
+      "Target: $750k ARR by month 12, $2.5M by month 18, profitability by month 11, with a 3-person founding team and zero outside capital required.",
     ],
   },
   {
-    n: "02", t: "MARKET · WHY MINNEAPOLIS", c: "#00ffff",
+    n: "02", t: "MARKET · WHY MINNEAPOLIS, WHY UNIVERSAL", c: "#00ffff",
     paragraphs: [
-      "Minneapolis-St. Paul is the freight capital of the upper Midwest — home to C.H. Robinson (largest 3PL in NA), Coyote (UPS), Bay & Bay, and ~300 small-to-mid brokers. Freight brokerage is structurally under-automated and margin-pressured (avg net margin 2–3%). Even a 5% utilization lift is meaningful.",
-      "Adjacent industrial buyers (Pentair, Emerson, Donaldson, Polaris, 3M, Cargill, Hormel, Ecolab) sit within a 30-minute drive. Healthcare giants (UnitedHealth/Optum, Allina, HealthPartners) and Mayo Clinic in Rochester are an hour away — administrative automation is a 9-figure opportunity.",
-      "Buyer profile: pragmatic operators in their 40s–60s, ROI-driven, skeptical of west-coast AI hype. We sell with a one-pager, a live demo on their data, and a 30-day pilot — not a SaaS portal.",
+      "Minneapolis-St. Paul is the rare metro that has a top-5 player in nearly every industry we serve: freight (C.H. Robinson, Coyote/UPS), healthcare (UnitedHealth/Optum, Allina, HealthPartners), manufacturing (3M, Pentair, Donaldson, Polaris), retail (Best Buy, Target), insurance (Securian, Travelers), and law (Faegre Drinker, Robins Kaplan). Every industry has a 9-figure operations budget within a 30-minute drive.",
+      "Buyer profile across verticals: pragmatic operators in their 40s–60s, ROI-driven, skeptical of west-coast AI hype, allergic to bloated SaaS. We win by selling outcomes (hours reclaimed, tickets deflected, docs parsed) — not by selling 'a platform'.",
+      "Why universal beats vertical-only: every vertical-specific AI startup has to rebuild the same 6 agents. By sharing one core engine across industries, our COGS drops, our case-study velocity goes up, and we can cross-sell within enterprise accounts (Best Buy alone has freight, e-commerce, and support teams).",
     ],
   },
   {
     n: "03", t: "PRODUCT · THE FLEET", c: "#7c5cff",
     paragraphs: [
-      "Six agents, one console. Each agent is a system-prompted Claude/GPT model wrapped in JADE's freight-trained context, with structured outputs, audit logs, and human-in-the-loop approvals.",
-      "Freight Broker Co-Pilot (flagship): paste a load posting → extract structured data → match to carrier list → draft outreach email → log everything. Replaces 2–4 hours/day of dispatcher email.",
-      "Other agents: Tier-1 Support, Sales Qualification, Document Extraction (BOL/invoice/intake), Operations Automation, Outbound Content Generation. All built on the same console and pricing.",
+      "Six agents, one console. Each agent is a system-prompted Claude/GPT model wrapped in JADE's vertical-tuned context, with structured outputs, audit logs, and human-in-the-loop approvals.",
+      "Tier-1 Support · Sales Qualification · Document & Data Extraction · Operations Automation · Outreach & Content · On-Call Ops Co-Pilot. Each ships with 11 industry profiles out of the box, loading the right lexicon (BOL/MC# vs ICD-10/CPT vs MRR/ARR), the right schema, and the right tone (operator-blunt vs healthcare-courteous).",
+      "Customers don't pick agents — they pick outcomes. We map outcomes to agents during the 20-minute ops review and ship in 30 days.",
     ],
   },
   {
     n: "04", t: "GO-TO-MARKET", c: "#ff3b8a",
     paragraphs: [
-      "Phase 1 (Months 0–3): 5 freight broker design partners at half price, in-person sales. Founder works the room — TIA, MSP logistics networking, LinkedIn outbound to MC-authority holders in MN/WI/IA.",
-      "Phase 2 (Months 3–6): convert design partners to full price, collect 3 published case studies (\"dispatcher hours reclaimed\", \"utilization +4.2%\", \"DSO −8 days\"). Use case studies for cold outreach to 200 brokers.",
-      "Phase 3 (Months 6–12): horizontal expansion. Adapt freight playbook for manufacturing intake, healthcare insurance verification, SaaS ticket triage. Same console, swapped system prompts.",
+      "Phase 1 (Months 0–3): 5 design partners across 3 verticals (2 freight, 2 healthcare admin, 1 SaaS support) at half price. Founder works the room — TIA, MN HIMSS, MSP SaaS meetup, LinkedIn outbound to ops directors.",
+      "Phase 2 (Months 3–6): convert design partners to full price. Publish 3 cross-vertical case studies (\"hours reclaimed\" universal headline). Cold outbound to 400 mid-market companies across all 10 verticals.",
+      "Phase 3 (Months 6–12): partner channel. Local consulting + RPA firms (Accenture MSP, Slalom, Ardalyst) resell JADE OS to their existing book. Channel partners receive 20% rev-share on first year.",
     ],
   },
   {
     n: "05", t: "PRICING + UNIT ECONOMICS", c: "#ccff00",
     paragraphs: [
-      "Three tiers: Dispatch ($1,500/mo · 1 agent), Fleet ($4,500/mo · 3 agents · most popular), Vault (custom · unlimited + on-prem). Implementation fee waived for design partners.",
+      "Three tiers: Dispatch ($1,500/mo · 1 agent · any vertical), Fleet ($4,500/mo · 3 agents · any verticals · most popular), Vault (custom · unlimited + on-prem). Implementation fee waived for design partners.",
       "Cost structure per Fleet customer/month: ~$180 LLM tokens (Claude Sonnet 4.5 + GPT-5.2 mix at Emergent universal-key rates), $80 hosting/observability, $40 customer-success allocation = $300 COGS. Gross margin ~93%.",
       "Payback period: 0.7 months on Fleet (assuming $2k blended CAC via founder-led sales). LTV:CAC tracking to 15:1 by month 12.",
     ],
@@ -48,27 +48,27 @@ const PLAN_SECTIONS = [
     n: "06", t: "FINANCIALS · 18 MONTHS", c: "#00ffff",
     paragraphs: [
       "Month 3: 5 design partners @ avg $2,500/mo = $12.5k MRR.",
-      "Month 6: 12 paid @ avg $3,800/mo = $45.6k MRR / $547k ARR run-rate.",
-      "Month 12: 24 paid @ avg $4,100/mo = $98.4k MRR / $1.18M ARR run-rate · positive cash flow.",
-      "Month 18: 40 paid @ avg $4,400/mo = $176k MRR / $2.1M ARR. Hire 1 customer success + 1 forward-deployed engineer.",
-      "Operating expenses Y1: $42k founder cash draw, ~$22k tooling (LLM + observability + CRM), ~$15k T&E/MSP networking. Net: profitable in month 11.",
+      "Month 6: 14 paid @ avg $3,800/mo = $53.2k MRR / $638k ARR run-rate.",
+      "Month 12: 28 paid @ avg $4,100/mo = $114.8k MRR / $1.38M ARR · positive cash flow.",
+      "Month 18: 48 paid @ avg $4,400/mo = $211k MRR / $2.53M ARR. Hire 1 customer success + 1 forward-deployed engineer + 1 vertical SDR.",
+      "Operating expenses Y1: $42k founder cash draw, ~$26k tooling (LLM + observability + CRM), ~$18k T&E/MSP networking. Net: profitable in month 11.",
     ],
   },
   {
     n: "07", t: "RISKS · MITIGATION", c: "#7c5cff",
     paragraphs: [
-      "Risk: hyperscalers ship freight-vertical agents. Mitigation: own the integration layer + last-mile dispatcher relationship. Stay 6 months ahead on workflow depth.",
+      "Risk: hyperscalers ship industry-specific agents. Mitigation: own the integration layer + last-mile operator relationships in MSP. Stay 6 months ahead on workflow depth and per-industry tuning.",
       "Risk: LLM cost spikes. Mitigation: token budgets per customer, automatic model routing (Sonnet → Haiku for cheap tasks), Emergent universal key gives multi-provider pricing leverage.",
-      "Risk: long enterprise sales cycle on healthcare. Mitigation: don't sell healthcare until month 9 — keep freight as the cash engine until then.",
+      "Risk: enterprise compliance friction in healthcare/legal/finance. Mitigation: don't take regulated workloads until month 6+; for early healthcare deals, scope to non-PHI use cases only until BAA is in place.",
     ],
   },
   {
     n: "08", t: "TEAM + ASK", c: "#ff3b8a",
     paragraphs: [
-      "Founder: 10+ years in freight ops / 3PL operations. Holds the rolodex. Sells. Implements.",
-      "Co-founder (forward-deployed engineer): integrates agents with customer TMS/CRM. Hired month 4 from MRR.",
-      "Customer success lead: hired month 9. Onboards new Fleet customers and runs quarterly ops reviews.",
-      "We are bootstrapping — no outside capital. Open to a single strategic angel ($100–250k) from a Minneapolis logistics operator who wants to ride the wave.",
+      "Founder: 10+ years in freight ops / 3PL operations. Holds the MSP rolodex. Sells. Implements.",
+      "Co-founder (forward-deployed engineer): integrates agents with customer TMS/CRM/EMR/helpdesk. Hired month 4 from MRR.",
+      "Customer success lead: hired month 9. Onboards new Fleet customers and runs quarterly ops reviews across all verticals.",
+      "We are bootstrapping — no outside capital required. Open to a single strategic angel ($100–250k) from a Minneapolis operator who wants to ride the wave.",
     ],
   },
 ];
@@ -126,10 +126,10 @@ export default function BusinessPlan() {
             <div className="lg:col-span-2">
               <h1 className="font-display font-black text-white text-5xl sm:text-7xl tracking-tighter glow-lime">
                 The plan.<br />
-                <span className="accent-cyan text-5xl sm:text-7xl">Eighteen months. Two million ARR.</span>
+                <span className="accent-cyan text-5xl sm:text-7xl">Eighteen months. $2.5M ARR. Every industry in MSP.</span>
               </h1>
               <p className="mt-6 text-white/65 max-w-2xl leading-relaxed">
-                A complete operator's playbook for JADE OS: market, product, GTM, pricing, financials, risks, and the ask. Read it on the page or grab the PDF.
+                A complete operator's playbook for JADE OS: market, product, GTM across all 10 verticals, pricing, financials, risks, and the ask. Read it on the page or grab the PDF.
               </p>
             </div>
             <div className="flex flex-col gap-3">
@@ -137,10 +137,10 @@ export default function BusinessPlan() {
                 <DownloadSimple size={16} weight="bold" /> DOWNLOAD PDF
               </button>
               <div className="grid grid-cols-2 gap-3">
-                <KPI k="ARR · M18" v="$2.1M" c="#ccff00" />
+                <KPI k="ARR · M18" v="$2.5M" c="#ccff00" />
                 <KPI k="GM" v="93%" c="#00ffff" />
                 <KPI k="CASH BREAK" v="M11" c="#7c5cff" />
-                <KPI k="DESIGN PARTNERS" v="5" c="#ff3b8a" />
+                <KPI k="VERTICALS" v="10+" c="#ff3b8a" />
               </div>
             </div>
           </div>

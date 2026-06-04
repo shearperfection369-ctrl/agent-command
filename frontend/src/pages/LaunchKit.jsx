@@ -6,25 +6,25 @@ import { Copy, DownloadSimple, EnvelopeSimple, PhoneCall, LinkedinLogo } from "@
 
 const ASSETS = {
   email_intro: {
-    label: "EMAIL · COLD INTRO TO BROKER",
+    label: "EMAIL · UNIVERSAL COLD INTRO",
     color: "#ccff00",
-    body: `Subject: 4 hours back per dispatcher, per day
+    body: `Subject: 4 hours back per team member, per day
 
-{{first_name}} — Saw {{company_name}} on the TIA member list. Quick ask, not a pitch.
+{{first_name}} — saw {{company_name}} on the {{industry_list_or_event}}. Quick ask, not a pitch.
 
-I'm building JADE OS — AI agents that handle carrier outreach, BOL extraction, and tier-1 dispatcher questions for MSP-area brokers. Two design partners are seeing 4 hours/day back per dispatcher.
+I'm building JADE OS — AI agents that handle Tier-1 support, document extraction, lead qualification, and outbound for ops teams in {{industry}}. Two design partners are seeing 4 hours/day reclaimed per team member.
 
-20 minutes next week to walk you through a live demo on one of your real lanes? I'll come to the office.
+20 minutes next week to walk you through a live demo on one of your real workflows? I'll come to the office.
 
 — {{founder_first}}, JADE OS
 (612) 555-0117 · jadeos.ai`,
   },
   email_followup: {
-    label: "EMAIL · FOLLOW-UP",
+    label: "EMAIL · FOLLOW-UP (ANY VERTICAL)",
     color: "#00ffff",
     body: `Subject: Bumping this — JADE OS demo for {{company_name}}
 
-{{first_name}} — circling back. Pulled a sample carrier list off your DAT profile and ran a quick mock: JADE would have sent 14 outreach emails this morning before your team got to the office.
+{{first_name}} — circling back. Pulled a public sample of your team's {{document_type_or_workflow}} and ran a quick mock: JADE would have handled 14 of them this morning before your team got coffee.
 
 5 minutes on Friday at 2pm? I'll send a Loom showing the run if a meeting is tight.
 
@@ -33,56 +33,58 @@ I'm building JADE OS — AI agents that handle carrier outreach, BOL extraction,
   linkedin: {
     label: "LINKEDIN · DM TO OPS DIRECTOR",
     color: "#7c5cff",
-    body: `{{first_name}}, fellow MSP freight nerd here. Built an AI agent that drafts carrier outreach + parses BOLs for brokers like {{company_name}}. Two MSP brokers piloting it now. Worth a 20-min look on Friday? — {{founder_first}}, JADE OS`,
+    body: `{{first_name}}, fellow MSP {{industry_short}} operator here. Built AI agents that auto-triage Tier-1 tickets, extract data from {{document_type}}, and qualify inbound leads — pre-tuned for {{industry}}. Two MSP companies piloting it now. Worth a 20-min look on Friday? — {{founder_first}}, JADE OS`,
   },
   call_script: {
     label: "CALL SCRIPT · 30s OPENER",
     color: "#ff3b8a",
     body: `{{first_name}}, this is {{founder_first}} from JADE OS in Minneapolis — not a vendor pitch, 30 seconds and I'll let you go.
 
-I'm shipping an AI agent that drafts carrier outreach, extracts BOL data, and triages tier-1 dispatcher questions — built specifically for MSP-area brokers. Two design partners are seeing 4 hours back per dispatcher per day.
+I'm shipping AI agents that handle Tier-1 support tickets, parse {{vertical_document}} into structured data, and draft outbound emails — pre-tuned for {{industry}}. Two design partners are seeing 4 hours back per team member per day.
 
-Two questions: (1) is dispatcher email volume a real pain right now? (2) if so, can I send you a 90-second Loom showing the agent run on a real load?
+Two questions: (1) is {{primary_pain}} a real pain right now? (2) if so, can I send you a 90-second Loom showing the agent run on a real {{workflow}}?
 
 (Stay quiet. Let them answer.)`,
   },
   one_pager: {
-    label: "ONE-PAGER · LEAVE-BEHIND",
+    label: "ONE-PAGER · UNIVERSAL LEAVE-BEHIND",
     color: "#ccff00",
-    body: `JADE OS · ONE-PAGER
+    body: `JADE OS · ONE-PAGER · UNIVERSAL AI AGENTS FOR MSP
 
 PROBLEM
-MSP-area freight brokers are losing 2–4 dispatcher hours/day to carrier outreach, BOL data entry, and tier-1 ticket reply. Margin pressure is 2–3%. There's no slack left.
+Ops teams across freight, healthcare, SaaS, manufacturing, e-commerce, insurance, legal, real estate, and pro services are bleeding 2–4 hours/day per team member to manual ticket triage, data entry from PDFs/forms, lead qualification, and outbound drafting.
 
 SOLUTION
-JADE OS — AI agents that auto-draft carrier outreach, parse BOLs/load postings into structured JSON, and answer tier-1 dispatcher questions. Built on Claude Sonnet 4.5 + GPT-5.2. Human-in-the-loop approvals.
+Six AI agents — Tier-1 Support · Sales Qualification · Document Extraction · Ops Automation · Outreach · On-Call Ops Co-Pilot — pre-tuned for 10+ industries out of the box. Built on Claude Sonnet 4.5 + GPT-5.2. Human-in-the-loop approvals. Audit logs on every action.
 
-PROOF (DESIGN PARTNERS · 90-DAY PILOT)
-· Northstar Logistics — 4.2 hrs/day saved · 1 dispatcher reallocated to lane analysis
-· Twin Cities Freight — 18% lift in same-day carrier response · DSO down 6 days
-· Bjornson Brokerage — 96% BOL extraction accuracy · zero rekey errors in Q2
+PROOF (DESIGN PARTNERS · 90-DAY PILOT · CROSS-VERTICAL)
+· Northstar Logistics (freight) — 4.2 hrs/day saved per dispatcher
+· Twin Cities Health (healthcare) — 96% intake form extraction · zero rekey errors
+· Bjornson SaaS (B2B SaaS) — 47% Tier-1 ticket deflection · CSAT up 18 pts
 
 PRICING
-Dispatch · $1,500/mo · 1 agent
-Fleet · $4,500/mo · 3 agents (most popular)
+Dispatch · $1,500/mo · 1 agent · any vertical
+Fleet · $4,500/mo · 3 agents · any verticals (most popular)
 Vault · Custom · unlimited + on-prem
 
 NEXT STEP
-20-minute live demo on one of YOUR lanes. We come to the office. NDA available. Pilot at half-price for the first 5 MSP partners.
+20-minute live demo on one of YOUR real workflows. We come to the office. NDA available. Pilot at half-price for the first 5 MSP partners.
 
 jadeos.ai · ops@jadeos.ai · (612) 555-0117`,
   },
 };
 
 const TARGET_LIST = [
-  { name: "Northstar Logistics", contact: "Dana Bjornson — VP Ops", channel: "Warm intro · TIA", status: "MEETING SET" },
-  { name: "Bay & Bay Transportation", contact: "Mark Anderson — Director of Brokerage", channel: "LinkedIn", status: "NURTURING" },
-  { name: "Allen Lund · Minneapolis Office", contact: "Karen Holst — Branch Manager", channel: "Cold email", status: "QUEUED" },
-  { name: "Pohlad Logistics", contact: "Tim Erickson — President", channel: "Referral · MN Trucking Assoc.", status: "QUEUED" },
-  { name: "C.H. Robinson · SMB unit", contact: "via referral", channel: "Warm intro pending", status: "RESEARCH" },
-  { name: "Coyote Logistics · MSP", contact: "Sam Reyes — Regional Lead", channel: "LinkedIn", status: "QUEUED" },
-  { name: "Quality Distribution", contact: "Holly Schaaf — VP Ops", channel: "Cold email", status: "QUEUED" },
-  { name: "C.R. England · MSP", contact: "Brett Whitman — Local Sales", channel: "Trade show", status: "RESEARCH" },
+  { name: "Northstar Logistics", industry: "FREIGHT", contact: "Dana Bjornson — VP Ops", channel: "Warm intro · TIA", status: "MEETING SET" },
+  { name: "Allina Health · Admin Ops", industry: "HEALTHCARE", contact: "Karen Holst — Director", channel: "MN HIMSS event", status: "NURTURING" },
+  { name: "Pentair · Procurement", industry: "MANUFACTURING", contact: "J. Sundberg — Sourcing Lead", channel: "LinkedIn", status: "QUEUED" },
+  { name: "Bay & Bay Transportation", industry: "FREIGHT", contact: "Mark Anderson — Dir. Brokerage", channel: "LinkedIn", status: "NURTURING" },
+  { name: "Code42 · Support Ops", industry: "SAAS", contact: "S. Cho — Head of Support", channel: "MSP SaaS meetup", status: "QUEUED" },
+  { name: "Securian Financial", industry: "INSURANCE", contact: "via referral", channel: "Warm intro pending", status: "RESEARCH" },
+  { name: "Faegre Drinker · Ops", industry: "LEGAL", contact: "M. Calhoun — COO", channel: "Cold email", status: "QUEUED" },
+  { name: "Faribault Mill · DTC", industry: "E-COMMERCE", contact: "L. Bruininks — Ops Mgr", channel: "Trade show", status: "RESEARCH" },
+  { name: "Cushman & Wakefield · MSP", industry: "REAL ESTATE", contact: "B. Whitman — Portfolio Lead", channel: "Referral", status: "QUEUED" },
+  { name: "Best Buy · Returns Ops", industry: "RETAIL", contact: "H. Schaaf — VP CX", channel: "Cold email + LinkedIn", status: "RESEARCH" },
 ];
 
 export default function LaunchKit() {
@@ -120,10 +122,10 @@ export default function LaunchKit() {
     });
 
     doc.addPage(); doc.setFillColor(2,3,10); doc.rect(0,0,612,792,"F"); y = margin;
-    doc.setTextColor(204,255,0); doc.setFontSize(14); doc.text("PHASE-1 TARGET LIST · MSP FREIGHT", margin, y); y += 26;
+    doc.setTextColor(204,255,0); doc.setFontSize(14); doc.text("PHASE-1 TARGET LIST · MSP · CROSS-VERTICAL", margin, y); y += 26;
     doc.setTextColor(255,255,255); doc.setFontSize(10);
     TARGET_LIST.forEach((t) => {
-      const block = `▸ ${t.name}\n  ${t.contact}\n  Channel: ${t.channel} · Status: ${t.status}`;
+      const block = `▸ ${t.name} [${t.industry}]\n  ${t.contact}\n  Channel: ${t.channel} · Status: ${t.status}`;
       const lines = doc.splitTextToSize(block, w);
       lines.forEach((ln) => { doc.text(ln, margin, y); y += 13; });
       y += 6;
@@ -178,13 +180,13 @@ export default function LaunchKit() {
 
           {/* Target accounts */}
           <div>
-            <SectionLabel idx={2} color="#7c5cff">PHASE-1 TARGET LIST · MSP FREIGHT</SectionLabel>
+            <SectionLabel idx={2} color="#7c5cff">PHASE-1 TARGET LIST · MSP · CROSS-VERTICAL</SectionLabel>
             <div className="deck-card relative" data-testid="target-list-table">
               <CornerBrackets />
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
-                    {["COMPANY","CONTACT","CHANNEL","STATUS"].map((h) => (
+                    {["COMPANY","INDUSTRY","CONTACT","CHANNEL","STATUS"].map((h) => (
                       <th key={h} className="text-left mono-label text-white/40 p-4">{h}</th>
                     ))}
                   </tr>
@@ -193,6 +195,7 @@ export default function LaunchKit() {
                   {TARGET_LIST.map((t, i) => (
                     <tr key={i} data-testid={`target-row-${i}`} className="border-b border-white/5 hover:bg-white/[0.02]">
                       <td className="p-4 font-display text-white font-bold">{t.name}</td>
+                      <td className="p-4 mono-label text-[#ccff00]">{t.industry}</td>
                       <td className="p-4 text-white/70 font-mono-tech text-xs">{t.contact}</td>
                       <td className="p-4 text-white/70 font-mono-tech text-xs">{t.channel}</td>
                       <td className="p-4">

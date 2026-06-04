@@ -94,7 +94,7 @@ class TokenResponse(BaseModel):
 class AgentRun(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    agent_type: Literal["chat", "extract_bol", "draft_outreach", "qualify_lead"]
+    agent_type: Literal["chat", "extract", "extract_bol", "draft_outreach", "qualify_lead", "support_triage"]
     model: str
     provider: str
     input_preview: str
@@ -104,22 +104,32 @@ class AgentRun(BaseModel):
     created_at: str = Field(default_factory=_utcnow_iso)
 
 
+Industry = Literal[
+    "freight_brokerage", "logistics", "manufacturing", "healthcare",
+    "saas", "ecommerce", "insurance", "legal", "real_estate", "professional_services", "general"
+]
+
+
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    industry: Industry = "general"
     provider: Literal["anthropic", "openai"] = "anthropic"
     model: Optional[str] = None
 
 
-class ExtractBOLRequest(BaseModel):
+class ExtractRequest(BaseModel):
     text: str
+    industry: Industry = "general"
+    document_type: Optional[str] = None  # e.g. "bol", "invoice", "intake_form"
     provider: Literal["anthropic", "openai"] = "anthropic"
 
 
 class OutreachRequest(BaseModel):
-    load_summary: str
-    carrier_name: Optional[str] = "Operator"
+    summary: str
+    recipient: Optional[str] = "Operator"
     tone: str = "direct"
+    industry: Industry = "general"
     provider: Literal["anthropic", "openai"] = "anthropic"
 
 
@@ -130,6 +140,14 @@ class QualifyLeadRequest(BaseModel):
     monthly_volume: Optional[str] = None
     budget: Optional[str] = None
     timeline: Optional[str] = None
+    industry: Industry = "general"
+    provider: Literal["anthropic", "openai"] = "anthropic"
+
+
+class SupportTicketRequest(BaseModel):
+    ticket: str
+    industry: Industry = "general"
+    company_context: Optional[str] = None
     provider: Literal["anthropic", "openai"] = "anthropic"
 
 
@@ -166,14 +184,30 @@ async def require_admin(creds: Optional[HTTPAuthorizationCredentials] = Depends(
 
 
 # -------------------- LLM helpers --------------------
-SYSTEM_PROMPT_BROKER = (
-    "You are JADE — the operator-grade AI agent for freight brokers, 3PLs, and dispatchers in the upper Midwest. "
-    "You speak short. Action verbs. Console-style precision. Light operator pet-names ('operator', 'captain') used sparingly. "
-    "Tech words allowed: tape, deck, vault, console, drop, lab, rig. Never bubbly. Never apologetic. Never marketing-speak. "
-    "You know freight: BOLs, load postings, lane rates, deadhead, RPM, MC numbers, DAT/Truckstop conventions, FTL/LTL, "
-    "shipper/consignee, accessorials, detention, layover. You help match loads, draft carrier outreach, "
-    "extract structured data, and route tier-1 questions. Stay factual. Cite when uncertain."
-)
+INDUSTRY_LEXICON = {
+    "freight_brokerage": "freight broker / 3PL ops. Vocabulary: BOL, MC#, lane, RPM, deadhead, FTL/LTL, accessorials, detention, DAT/Truckstop, drop-and-hook.",
+    "logistics": "carrier / fleet / warehouse ops. Vocabulary: route, dwell, dock, SKU, OS&D, yard, ELD, HOS.",
+    "manufacturing": "production / supply chain. Vocabulary: BOM, MRP, takt time, OEE, work order, lot, defect class, scrap rate.",
+    "healthcare": "healthcare admin / clinical ops. Vocabulary: ICD-10, CPT, prior auth, EOB, intake, referral, HIPAA, payer.",
+    "saas": "B2B SaaS. Vocabulary: MRR, ARR, churn, NRR, NPS, PQL, ICP, expansion, seat-based pricing.",
+    "ecommerce": "DTC / marketplace ops. Vocabulary: SKU, AOV, CAC, LTV, RMA, fulfillment, abandoned cart, conversion.",
+    "insurance": "insurance ops. Vocabulary: claim, adjuster, policy, premium, COI, subrogation, FNOL, underwriting.",
+    "legal": "legal ops / law firm. Vocabulary: intake, conflict check, billable, retainer, discovery, matter, redline.",
+    "real_estate": "commercial / property management. Vocabulary: lease, tenant, CAM, NOI, work order, vacancy, NNN.",
+    "professional_services": "agencies / consultancies. Vocabulary: scope, SOW, deliverable, retainer, utilization, billable.",
+    "general": "general B2B operator language. Stay industry-neutral but pragmatic.",
+}
+
+
+def _system_for(industry: str, role_hint: str) -> str:
+    lex = INDUSTRY_LEXICON.get(industry, INDUSTRY_LEXICON["general"])
+    return (
+        f"You are JADE — the operator-grade AI agent. Voice: short. Action verbs. Console-style precision. "
+        f"Light operator pet-names ('operator', 'captain') used sparingly. Never bubbly. Never apologetic. Never marketing-speak. "
+        f"You serve a {industry.replace('_', ' ')} operator. Context lexicon: {lex} "
+        f"Role for this turn: {role_hint}. Be factual, cite uncertainty, and never invent regulated data (medical/legal/financial)."
+    )
+
 
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-4-5-20250929",
@@ -200,6 +234,16 @@ async def _log_run(agent_type: str, provider: str, model: str, inp: str, out: st
         success=success,
     )
     await db.agent_runs.insert_one(run.model_dump())
+
+
+def _strip_json(text: str) -> str:
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("```", 2)[1]
+        if t.lower().startswith("json"):
+            t = t[4:]
+        t = t.strip("` \n")
+    return t
 
 
 # -------------------- Routes: health --------------------
@@ -247,7 +291,8 @@ async def update_lead_status(lead_id: str, status_value: str, _: str = Depends(r
 # -------------------- Routes: agent demo --------------------
 @api.post("/agent/chat")
 async def agent_chat(body: ChatRequest):
-    chat = _llm(body.session_id, SYSTEM_PROMPT_BROKER, body.provider, body.model)
+    sys_msg = _system_for(body.industry, "be a knowledgeable Tier-1 / ops co-pilot — answer questions, route issues, escalate when needed")
+    chat = _llm(body.session_id, sys_msg, body.provider, body.model)
     user_msg = UserMessage(text=body.message)
     model_used = body.model or DEFAULT_MODELS[body.provider]
 
@@ -261,7 +306,7 @@ async def agent_chat(body: ChatRequest):
                 elif isinstance(ev, StreamDone):
                     break
             yield f"data: {json.dumps({'done': True})}\n\n"
-            await _log_run("chat", body.provider, model_used, body.message, "".join(full))
+            await _log_run("chat", body.provider, model_used, f"[{body.industry}] {body.message}", "".join(full))
         except Exception as e:
             log.exception("chat stream error")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -273,29 +318,41 @@ async def agent_chat(body: ChatRequest):
     )
 
 
-EXTRACT_SYSTEM = (
-    "You are JADE's data extraction subroutine. Extract a load posting / BOL / shipment text into strict JSON. "
-    "Return ONLY a JSON object — no prose, no markdown fences. "
-    "Schema: {origin_city, origin_state, dest_city, dest_state, equipment, weight_lbs, pickup_date, "
-    "delivery_date, rate_usd, commodity, miles, mc_number, reference_number, contact_name, contact_phone, notes}. "
-    "Use null for unknown fields. Numbers as numbers. Dates as ISO YYYY-MM-DD when possible."
-)
+def _extract_schema_hint(industry: str, doc_type: Optional[str]) -> str:
+    base = (
+        "Schemas vary by document. Common fields when present: parties (from, to), dates, identifiers, "
+        "monetary_amounts, line_items[], totals, addresses, contacts, status, notes. "
+        "Detect the document_type from content if unclear and include it in the output."
+    )
+    hints = {
+        "freight_brokerage": "If freight: origin_city/state, dest_city/state, equipment, weight_lbs, pickup_date, delivery_date, rate_usd, commodity, miles, mc_number, reference_number, contact_name, contact_phone.",
+        "logistics": "If shipment/manifest: tracking_id, carrier, origin, destination, weight, pieces, status, eta.",
+        "manufacturing": "If PO/work order: po_number, vendor, items[], quantities, lead_times, due_date, total.",
+        "healthcare": "If intake / EOB: patient_name (redact when possible), dob, insurer, member_id (mask), policy, claim_id, dos, provider, diagnosis_codes, cpt_codes, amount, notes. NEVER invent PHI.",
+        "saas": "If contract/order form: account, plan, seats, mrr_usd, term_months, start_date, renewal_date, owner.",
+        "ecommerce": "If order/return: order_id, customer, items[], sku, qty, price, ship_to, return_reason.",
+        "insurance": "If claim/policy: claim_number, policy_number, insured, dol, loss_type, adjuster, reserve, status.",
+        "legal": "If intake/matter: matter_id, client, conflict_check, jurisdiction, opposing_party, counsel, dates.",
+        "real_estate": "If lease/work order: property, unit, tenant, term, monthly_rent, cam, request_type, priority.",
+        "professional_services": "If SOW/proposal: client, scope, deliverables[], fee_usd, term, owner, milestones.",
+    }
+    extra = hints.get(industry, "")
+    if doc_type:
+        extra += f" Caller hinted document_type='{doc_type}'."
+    return f"{base} {extra}"
 
 
-def _strip_json(text: str) -> str:
-    t = text.strip()
-    if t.startswith("```"):
-        t = t.split("```", 2)[1]
-        if t.lower().startswith("json"):
-            t = t[4:]
-        t = t.strip("` \n")
-    return t
-
-
-@api.post("/agent/extract-bol")
-async def extract_bol(body: ExtractBOLRequest):
+@api.post("/agent/extract")
+async def agent_extract(body: ExtractRequest):
+    sys_msg = (
+        f"You are JADE's data extraction subroutine for {body.industry.replace('_', ' ')}. "
+        f"Extract the input text/document into strict JSON. Return ONLY a JSON object — no prose, no markdown fences. "
+        f"{_extract_schema_hint(body.industry, body.document_type)} "
+        f"Use null for unknown fields. Numbers as numbers. Dates as ISO YYYY-MM-DD when possible. "
+        f"For PII in regulated industries (healthcare, legal, insurance), redact sensitive identifiers with '***' but keep structure."
+    )
     session = str(uuid.uuid4())
-    chat = _llm(session, EXTRACT_SYSTEM, body.provider)
+    chat = _llm(session, sys_msg, body.provider)
     model = DEFAULT_MODELS[body.provider]
     try:
         raw = []
@@ -309,27 +366,32 @@ async def extract_bol(body: ExtractBOLRequest):
             data = json.loads(_strip_json(raw_text))
         except Exception:
             data = {"raw": raw_text, "parse_error": True}
-        await _log_run("extract_bol", body.provider, model, body.text, json.dumps(data)[:500])
-        return {"extracted": data}
+        await _log_run("extract", body.provider, model, f"[{body.industry}] {body.text[:200]}", json.dumps(data)[:500])
+        return {"extracted": data, "industry": body.industry}
     except Exception as e:
         log.exception("extract error")
         raise HTTPException(500, str(e))
 
 
-OUTREACH_SYSTEM = (
-    "You are JADE's outreach drafter for freight dispatchers. Write a short, no-fluff carrier outreach email. "
-    "5–8 sentences max. Subject line on first line prefixed 'Subject: '. Direct. Includes ask, lane, rate or 'open to rate', "
-    "pickup window, MC/contact. No emojis. No 'I hope this finds you well'. Operator-grade."
-)
+# Backwards-compatible alias for the BOL endpoint
+@api.post("/agent/extract-bol")
+async def agent_extract_bol(body: ExtractRequest):
+    body.industry = body.industry or "freight_brokerage"
+    return await agent_extract(body)
 
 
 @api.post("/agent/draft-outreach")
 async def draft_outreach(body: OutreachRequest):
+    sys_msg = _system_for(body.industry, "draft a short, no-fluff outreach email") + (
+        " Write 5–8 sentences. Subject line on first line prefixed 'Subject: '. Direct ask. "
+        " Match the tone to the industry — operator-direct for ops verticals, courteous-direct for healthcare/legal. "
+        " No emojis. No 'I hope this finds you well'."
+    )
     session = str(uuid.uuid4())
-    chat = _llm(session, OUTREACH_SYSTEM, body.provider)
+    chat = _llm(session, sys_msg, body.provider)
     model = DEFAULT_MODELS[body.provider]
     prompt = (
-        f"Carrier: {body.carrier_name}\nTone: {body.tone}\nLoad summary:\n{body.load_summary}\n"
+        f"Recipient: {body.recipient}\nTone: {body.tone}\nIndustry: {body.industry}\nContext:\n{body.summary}\n"
         "Draft the email now."
     )
     try:
@@ -340,28 +402,27 @@ async def draft_outreach(body: OutreachRequest):
             elif isinstance(ev, StreamDone):
                 break
         text = "".join(out).strip()
-        await _log_run("draft_outreach", body.provider, model, body.load_summary, text)
-        return {"email": text}
+        await _log_run("draft_outreach", body.provider, model, f"[{body.industry}] {body.summary[:200]}", text)
+        return {"email": text, "industry": body.industry}
     except Exception as e:
         log.exception("outreach error")
         raise HTTPException(500, str(e))
 
 
-QUALIFY_SYSTEM = (
-    "You are JADE's sales qualification analyst. Score a B2B lead 0-100 for fit with JADE OS "
-    "(AI agents for Minneapolis logistics / freight / 3PL / ops automation). "
-    "Return ONLY JSON with fields: score (0-100), tier ('hot'|'warm'|'cold'), rationale (<= 60 words), "
-    "next_action (1 sentence), red_flags (array of strings), green_flags (array of strings)."
-)
-
-
 @api.post("/agent/qualify-lead")
 async def qualify_lead(body: QualifyLeadRequest):
+    sys_msg = (
+        f"You are JADE's sales qualification analyst for {body.industry.replace('_', ' ')} prospects. "
+        "Score 0-100 for fit with JADE OS (universal AI agents for support, sales-qual, data extraction, ops automation, content). "
+        "Return ONLY JSON with: score (0-100), tier ('hot'|'warm'|'cold'), rationale (<= 60 words), "
+        "next_action (1 sentence), red_flags (array of strings), green_flags (array of strings), "
+        "recommended_agent (one of: support, sales_qual, data_extraction, ops_automation, content_generation)."
+    )
     session = str(uuid.uuid4())
-    chat = _llm(session, QUALIFY_SYSTEM, body.provider)
+    chat = _llm(session, sys_msg, body.provider)
     model = DEFAULT_MODELS[body.provider]
     prompt = (
-        f"Company: {body.company}\nRole: {body.role}\nUse case: {body.use_case}\n"
+        f"Industry: {body.industry}\nCompany: {body.company}\nRole: {body.role}\nUse case: {body.use_case}\n"
         f"Monthly volume: {body.monthly_volume}\nBudget: {body.budget}\nTimeline: {body.timeline}\n"
         "Score now."
     )
@@ -377,10 +438,46 @@ async def qualify_lead(body: QualifyLeadRequest):
             data = json.loads(_strip_json(raw_text))
         except Exception:
             data = {"raw": raw_text, "parse_error": True}
-        await _log_run("qualify_lead", body.provider, model, prompt, json.dumps(data)[:500])
-        return {"result": data}
+        await _log_run("qualify_lead", body.provider, model, f"[{body.industry}] {prompt[:200]}", json.dumps(data)[:500])
+        return {"result": data, "industry": body.industry}
     except Exception as e:
         log.exception("qualify error")
+        raise HTTPException(500, str(e))
+
+
+@api.post("/agent/support-triage")
+async def support_triage(body: SupportTicketRequest):
+    sys_msg = _system_for(body.industry, "triage a Tier-1 support ticket") + (
+        " Return ONLY JSON with: category (string), priority ('p0'|'p1'|'p2'|'p3'), "
+        " sentiment ('angry'|'frustrated'|'neutral'|'positive'), summary (<= 30 words), "
+        " suggested_response (3-6 sentences, in the brand voice), "
+        " escalate (boolean), escalate_to (string or null), tags (array of strings)."
+    )
+    session = str(uuid.uuid4())
+    chat = _llm(session, sys_msg, body.provider)
+    model = DEFAULT_MODELS[body.provider]
+    prompt = (
+        f"Industry: {body.industry}\n"
+        f"Company context: {body.company_context or 'n/a'}\n"
+        f"Inbound ticket:\n{body.ticket}\n"
+        "Triage now."
+    )
+    try:
+        raw = []
+        async for ev in chat.stream_message(UserMessage(text=prompt)):
+            if isinstance(ev, TextDelta):
+                raw.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+        raw_text = "".join(raw)
+        try:
+            data = json.loads(_strip_json(raw_text))
+        except Exception:
+            data = {"raw": raw_text, "parse_error": True}
+        await _log_run("support_triage", body.provider, model, f"[{body.industry}] {body.ticket[:200]}", json.dumps(data)[:500])
+        return {"result": data, "industry": body.industry}
+    except Exception as e:
+        log.exception("support error")
         raise HTTPException(500, str(e))
 
 
