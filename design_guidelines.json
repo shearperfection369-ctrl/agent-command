@@ -1,0 +1,127 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4: Swiss & High-Contrast (Industrial Dark Variant)",
+  "emotional_tone": "Pragmatic, heavy-duty, reliable, confident, midwest grit, operator-grade.",
+  "typography": {
+    "heading_font": "Chivo",
+    "body_font": "IBM Plex Sans",
+    "mono_font": "IBM Plex Mono",
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl tracking-tighter font-black",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "h4": "text-lg font-semibold",
+      "body": "text-base leading-relaxed text-slate-300",
+      "small_labels": "text-xs tracking-[0.2em] uppercase text-[#FF9F0A]",
+      "data_points": "font-mono text-sm"
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#0D0E11",
+      "secondary": "#15171C"
+    },
+    "surface": {
+      "card": "#1A1D24",
+      "glass": "bg-black/60 backdrop-blur-xl border border-white/10"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A0A5B5",
+      "muted": "#64697A"
+    },
+    "accent": {
+      "primary": "#FF9F0A",
+      "primary_hover": "#FFB340",
+      "secondary": "#FF3B30",
+      "success": "#34C759"
+    },
+    "border": {
+      "default": "#272A30",
+      "focus": "#FF9F0A"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Dense information architecture, strict baseline grid, bento box modularity, technical and grid-focused.",
+    "spacing_scale": "Use p-6 or p-8 for cards. Use gap-6 or gap-8 for grids.",
+    "patterns": [
+      "Bento Grid for marketing showcases (Mode A).",
+      "Control Room Grid for the Admin Dashboard (Mode B).",
+      "Left rail for navigation/tools, center for workspace, right for reviews in the agent demo to establish Trust Architecture."
+    ]
+  },
+  "components_strategy": {
+    "cards": "Flat background (bg-[#1A1D24]), 1px subtle border (border-[#272A30]), zero shadow. Square corners or max 4px radius (rounded-sm) to feel industrial and mechanical.",
+    "buttons": "Primary: bg-[#FF9F0A] text-black font-bold hover:bg-[#FFB340]. Secondary: border border-[#272A30] text-white hover:bg-[#272A30]. No rounded buttons.",
+    "inputs": "Shadcn defaults with square corners. bg-[#0D0E11] border-[#272A30] focus-visible:ring-[#FF9F0A].",
+    "tables": "Dense. Left-aligned text. Monospace for tracking numbers, dates, IDs.",
+    "data_testid_rule": "ALL interactive elements must have data-testid attributes (e.g., data-testid='submit-lead-btn')."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Crisp transitions. Border color shifts from #272A30 to #FF9F0A.",
+    "animations": "Subtle. Micro-interactions for feedback. Avoid bouncy/playful animations. Use staggered fade-ins for tables and grids."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or bold weight. Industrial, sharp."
+  },
+  "media": {
+    "hero_backgrounds": [
+      {
+        "url": "https://images.pexels.com/photos/8725069/pexels-photo-8725069.jpeg",
+        "category": "hero",
+        "description": "Minneapolis skyline night industrial, high contrast for hero overlay"
+      },
+      {
+        "url": "https://images.pexels.com/photos/4940216/pexels-photo-4940216.jpeg",
+        "category": "background",
+        "description": "Cranes and cargo containers night sky for operations/logistics sections"
+      }
+    ],
+    "team_and_portraits": [
+      {
+        "url": "https://images.pexels.com/photos/9816965/pexels-photo-9816965.jpeg",
+        "category": "testimonial",
+        "description": "Truck driver/logistics operator portrait"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1759662232707-f1e0a4134c93",
+        "category": "testimonial",
+        "description": "Man in uniform by truck"
+      }
+    ],
+    "logistics_details": [
+      {
+        "url": "https://images.unsplash.com/photo-1573205485246-ee99bb898ff6",
+        "category": "feature",
+        "description": "Warehouse shelves / brown boxes"
+      }
+    ],
+    "logos": [
+      {
+        "url": "https://images.unsplash.com/photo-1775513143262-bccd605c5dd8",
+        "category": "sponsor_logo",
+        "description": "Canon logo for partner/trusted by section"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1622465911368-72162f8da3e2",
+        "category": "sponsor_logo",
+        "description": "Qarea logo for partner/trusted by section"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build a Hybrid Fullstack App: Landing Page + Agent Demo + Dashboard + Business Plan.",
+    "Install fonts from Google Fonts: Chivo, IBM Plex Sans, and IBM Plex Mono.",
+    "Install Phosphor Icons: yarn add @phosphor-icons/react.",
+    "Use pure HTML/Tailwind for Landing Page structures. Use Shadcn heavily customized for Admin Dashboard and forms.",
+    "Adhere to the Dark Industrial/Logistics theme: high contrast, zero/low border radius (rounded-none or rounded-sm), monospace accents.",
+    "For the interactive Freight Broker Agent Demo: use a split-pane layout (Left Rail = agent tools/memory, Center = BOL extraction/task space, Right = Agent confidence and approval controls).",
+    "No generic purple or teal gradients. Use #FF9F0A (Amber/Safety Orange) for primary CTA and high-vis actions.",
+    "Ensure the design feels like a midwest steel/freight software: pragmatic, data-dense, and reliable.",
+    "Implement 5 agent capability showcases in a bento-grid layout.",
+    "Create a downloadable Business Plan section / launch package.",
+    "Implement Admin login, leads table, and agent-run history.",
+    "ALWAYS include data-testid on interactive elements for testing."
+  ]
+}
