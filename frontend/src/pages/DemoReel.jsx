@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { api, API_BASE } from "../lib/api";
-import { Play, Pause, ArrowsClockwise, ArrowRight, SkipForward, ArrowClockwise } from "@phosphor-icons/react";
+import { Play, Pause, ArrowsClockwise, ArrowRight, SkipForward, ArrowClockwise } from "@/lib/icons";
 
 /**
  * Demo Reel — plays through 5 hand-curated company problems end-to-end.

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api } from "../lib/api";
 import { isAuthed } from "../lib/auth";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus } from "@phosphor-icons/react";
+import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus } from "@/lib/icons";
 
 export default function Dashboard() {
   const nav = useNavigate();

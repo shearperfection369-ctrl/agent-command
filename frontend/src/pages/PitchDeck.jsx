@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { jsPDF } from "jspdf";
 import { toast } from "sonner";
 import { CornerBrackets } from "../components/Brackets";
-import { ArrowRight, ArrowLeft, DownloadSimple, CaretLeft, CaretRight, PresentationChart } from "@phosphor-icons/react";
+import { ArrowRight, ArrowLeft, DownloadSimple, CaretLeft, CaretRight, PresentationChart } from "@/lib/icons";
 
 /* Slide deck — designed for SMB → mid-market → enterprise pitch reuse */
 const SLIDES = [

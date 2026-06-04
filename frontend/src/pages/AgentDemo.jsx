@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, User, ArrowsClockwise, Lifebuoy } from "@phosphor-icons/react";
+import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, User, ArrowsClockwise, Lifebuoy } from "@/lib/icons";
 import { api, API_BASE } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { INDUSTRIES, sampleFor } from "../lib/industries";

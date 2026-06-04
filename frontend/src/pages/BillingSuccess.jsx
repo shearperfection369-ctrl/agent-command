@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { CheckCircle, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, XCircle } from "@/lib/icons";
 
 export default function BillingSuccess() {
   const [sp] = useSearchParams();

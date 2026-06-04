@@ -5,7 +5,7 @@ import {
   ArrowRight, Lightning, Files, EnvelopeSimple, GearSix, Headset, Target,
   MapPin, Lock, Check, ChartLineUp, Robot, Briefcase, Truck, Heartbeat,
   Buildings, ShoppingBag, Stethoscope, Gavel, Wrench, Code,
-} from "@phosphor-icons/react";
+} from "@/lib/icons";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 

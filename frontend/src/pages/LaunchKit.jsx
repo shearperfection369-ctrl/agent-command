@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { Copy, DownloadSimple, EnvelopeSimple, PhoneCall, LinkedinLogo } from "@phosphor-icons/react";
+import { Copy, DownloadSimple, EnvelopeSimple, PhoneCall, LinkedinLogo } from "@/lib/icons";
 
 const ASSETS = {
   email_intro: {

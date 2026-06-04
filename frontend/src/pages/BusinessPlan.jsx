@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { toast } from "sonner";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { DownloadSimple, ChartBar, Flag, Users, CurrencyDollar, MapTrifold } from "@phosphor-icons/react";
+import { DownloadSimple } from "@/lib/icons";
 
 const PLAN_SECTIONS = [
   {

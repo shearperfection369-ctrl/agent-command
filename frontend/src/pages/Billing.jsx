@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { Check, ArrowRight } from "@phosphor-icons/react";
+import { Check, ArrowRight } from "@/lib/icons";
 
 const TIERS = [
   { id: "dispatch", name: "DISPATCH", price: "$1,500", per: "/MO", c: "#ccff00",

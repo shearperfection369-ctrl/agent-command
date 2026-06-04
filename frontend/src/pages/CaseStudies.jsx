@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { Quotes, ArrowRight, ArrowLeft, Check } from "@phosphor-icons/react";
+import { Quotes, ArrowRight, ArrowLeft, Check } from "@/lib/icons";
 
 export function CaseStudiesIndex() {
   const [cases, setCases] = useState([]);

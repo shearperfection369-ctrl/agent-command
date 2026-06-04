@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { api } from "../lib/api";
-import { ArrowRight, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowRight, MagnifyingGlass } from "@/lib/icons";
 
 export default function Portal() {
   const [email, setEmail] = useState("");

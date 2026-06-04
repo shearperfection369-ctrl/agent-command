@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, Lock } from "@phosphor-icons/react";
+import { ArrowRight, Lock } from "@/lib/icons";
 import { api } from "../lib/api";
 import { setToken } from "../lib/auth";
 import { CornerBrackets } from "../components/Brackets";
