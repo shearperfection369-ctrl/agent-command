@@ -144,12 +144,18 @@ export default function DemoReel() {
   const cancelRef = useRef(false);
 
   const scene = SCENES[sceneIdx];
-  const step = scene.steps[stepIdx];
-  const outputKey = `${sceneIdx}-${stepIdx}`;
+  const safeStepIdx = Math.min(stepIdx, scene.steps.length - 1);
+  const step = scene.steps[safeStepIdx];
+  const outputKey = `${sceneIdx}-${safeStepIdx}`;
   const output = outputs[outputKey] || "";
 
   useEffect(() => {
     cancelRef.current = false;
+    // Always normalize stepIdx when scene changes
+    if (stepIdx >= scene.steps.length) {
+      setStepIdx(0);
+      return;
+    }
     if (!autoplay) return;
     runStep();
     return () => { cancelRef.current = true; };
@@ -159,6 +165,7 @@ export default function DemoReel() {
   const setOut = (txt) => setOutputs((m) => ({ ...m, [outputKey]: txt }));
 
   const runStep = async () => {
+    if (!step) return;
     setPhase("RUNNING");
     setOut("");
     try {
@@ -180,12 +187,17 @@ export default function DemoReel() {
       if (cancelRef.current) return;
       setPhase("DONE");
       if (autoplay) {
+        // Snapshot the current scene/step at fire-time of the timer so we don't advance
+        // a NEW scene that the user may have clicked into during the delay.
+        const sceneAtSchedule = sceneIdx;
+        const stepAtSchedule = safeStepIdx;
         setTimeout(() => {
           if (cancelRef.current) return;
-          if (stepIdx + 1 < scene.steps.length) {
-            setStepIdx((x) => x + 1);
-          } else if (sceneIdx + 1 < SCENES.length) {
-            setSceneIdx((x) => x + 1);
+          if (sceneAtSchedule !== sceneIdx || stepAtSchedule !== safeStepIdx) return; // stale timer
+          if (stepAtSchedule + 1 < scene.steps.length) {
+            setStepIdx(stepAtSchedule + 1);
+          } else if (sceneAtSchedule + 1 < SCENES.length) {
+            setSceneIdx(sceneAtSchedule + 1);
             setStepIdx(0);
           } else {
             setAutoplay(false);
@@ -296,9 +308,9 @@ export default function DemoReel() {
             {/* Step tracker */}
             <div className="px-7 py-4 border-b border-white/5 flex items-center gap-3">
               {scene.steps.map((st, i) => (
-                <div key={i} className={`flex-1 p-3 border ${i === stepIdx ? "" : "opacity-50"}`}
-                  style={{ borderColor: i === stepIdx ? scene.color : "rgba(255,255,255,0.08)" }}>
-                  <div className="mono-label" style={{ color: i === stepIdx ? scene.color : "rgba(255,255,255,0.4)" }}>
+                <div key={i} className={`flex-1 p-3 border ${i === safeStepIdx ? "" : "opacity-50"}`}
+                  style={{ borderColor: i === safeStepIdx ? scene.color : "rgba(255,255,255,0.08)" }}>
+                  <div className="mono-label" style={{ color: i === safeStepIdx ? scene.color : "rgba(255,255,255,0.4)" }}>
                     STEP {String(i + 1).padStart(2, "0")} · {st.label}
                   </div>
                 </div>
@@ -343,7 +355,7 @@ export default function DemoReel() {
 
             {/* Footer CTA */}
             <div className="p-7 border-t border-white/5 flex flex-wrap items-center justify-between gap-4">
-              <div className="mono-label text-white/35">SCENE {sceneIdx + 1} / {SCENES.length} · STEP {stepIdx + 1} / {scene.steps.length}</div>
+              <div className="mono-label text-white/35">SCENE {sceneIdx + 1} / {SCENES.length} · STEP {safeStepIdx + 1} / {scene.steps.length}</div>
               <div className="flex gap-2">
                 <Link to="/demo" className="btn-ghost text-xs">OPEN FULL CONSOLE</Link>
                 <Link to="/#book" className="btn-jade text-xs inline-flex items-center gap-2">BOOK A DEMO <ArrowRight size={12} weight="bold" /></Link>
