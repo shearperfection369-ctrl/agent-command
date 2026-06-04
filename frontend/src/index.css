@@ -1,115 +1,252 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-    margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
+:root {
+    --jade-lime: #ccff00;
+    --quantum-cyan: #00ffff;
+    --vault-violet: #7c5cff;
+    --console-black: #02030a;
+    --console-black-2: #06081a;
+    --rose: #ff3b8a;
+    --grid-line: rgba(204, 255, 0, 0.07);
+    --border-soft: rgba(255, 255, 255, 0.08);
+}
+
+html, body, #root {
+    background: #02030a;
+    color: #e6e8ef;
+    font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+::selection {
+    background: #ccff00;
+    color: #02030a;
 }
 
+/* Shadcn HSL tokens — kept so shadcn components don't break, but tinted to jade theme */
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
+        --background: 234 64% 3%;
+        --foreground: 0 0% 95%;
+        --card: 234 50% 6%;
+        --card-foreground: 0 0% 95%;
+        --popover: 234 50% 6%;
+        --popover-foreground: 0 0% 95%;
+        --primary: 70 100% 50%;
+        --primary-foreground: 234 64% 3%;
+        --secondary: 234 30% 12%;
+        --secondary-foreground: 0 0% 95%;
+        --muted: 234 30% 12%;
+        --muted-foreground: 0 0% 65%;
+        --accent: 180 100% 50%;
+        --accent-foreground: 234 64% 3%;
+        --destructive: 340 100% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 234 30% 15%;
+        --input: 234 30% 12%;
+        --ring: 70 100% 50%;
+        --radius: 0.125rem;
     }
 }
 
 @layer base {
-    * {
-        @apply border-border;
-    }
+    * { @apply border-border; }
     body {
-        @apply bg-background text-foreground;
+        background: #02030a;
+        font-family: 'Inter', sans-serif;
     }
 }
 
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
-
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit;
-        margin-right: inherit;
-        margin-top: inherit;
-        margin-bottom: inherit;
-        padding-left: inherit;
-        padding-right: inherit;
-        padding-top: inherit;
-        padding-bottom: inherit;
-        column-gap: inherit;
-        row-gap: inherit;
-        gap: inherit;
-        border-left-width: inherit;
-        border-right-width: inherit;
-        border-top-width: inherit;
-        border-bottom-width: inherit;
-        border-left-style: inherit;
-        border-right-style: inherit;
-        border-top-style: inherit;
-        border-bottom-style: inherit;
-        border-left-color: inherit;
-        border-right-color: inherit;
-        border-top-color: inherit;
-        border-bottom-color: inherit;
-    }
+/* Display & mono utilities */
+.font-display { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.02em; }
+.font-mono-tech { font-family: 'JetBrains Mono', monospace; }
+.mono-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
 }
+
+/* Backgrounds */
+.bg-console { background: #02030a; }
+.bg-console-2 { background: linear-gradient(180deg, #02030a 0%, #06081a 100%); }
+.bg-card-deep { background: #0a0c18; }
+
+/* Grid backdrop */
+.grid-bg {
+    background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 56px 56px;
+}
+.grid-bg-tight {
+    background-image:
+        linear-gradient(rgba(204, 255, 0, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(204, 255, 0, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+}
+
+/* Corner brackets like the brand poster */
+.bracket-frame {
+    position: relative;
+}
+.bracket-frame::before,
+.bracket-frame::after {
+    content: "";
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: var(--jade-lime);
+    border-style: solid;
+}
+.bracket-frame::before {
+    top: -2px; left: -2px;
+    border-width: 2px 0 0 2px;
+}
+.bracket-frame::after {
+    bottom: -2px; right: -2px;
+    border-width: 0 2px 2px 0;
+}
+
+/* Pill chip like JADE OS poster */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--jade-lime);
+    background: rgba(204, 255, 0, 0.06);
+    color: var(--jade-lime);
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+}
+.chip-cyan { border-color: var(--quantum-cyan); color: var(--quantum-cyan); background: rgba(0,255,255,0.06); }
+.chip-violet { border-color: var(--vault-violet); color: var(--vault-violet); background: rgba(124,92,255,0.08); }
+.chip-rose { border-color: var(--rose); color: var(--rose); background: rgba(255,59,138,0.06); }
+
+/* Neon button (lime) */
+.btn-jade {
+    background: var(--jade-lime);
+    color: #02030a;
+    font-weight: 700;
+    padding: 14px 22px;
+    border: 1px solid var(--jade-lime);
+    font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: -0.01em;
+    transition: box-shadow 200ms ease, transform 120ms ease;
+}
+.btn-jade:hover {
+    box-shadow: 0 0 0 1px var(--jade-lime), 0 0 28px rgba(204,255,0,0.45);
+    transform: translateY(-1px);
+}
+.btn-ghost {
+    background: transparent;
+    color: #e6e8ef;
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 14px 22px;
+    font-family: 'Space Grotesk', sans-serif;
+    transition: border-color 200ms ease, color 200ms ease;
+}
+.btn-ghost:hover { border-color: var(--quantum-cyan); color: var(--quantum-cyan); }
+
+/* Italic cyan accent like brand */
+.accent-cyan {
+    font-style: italic;
+    color: var(--quantum-cyan);
+    font-weight: 500;
+}
+
+/* Neon glow text */
+.glow-lime { text-shadow: 0 0 18px rgba(204,255,0,0.35); }
+.glow-cyan { text-shadow: 0 0 18px rgba(0,255,255,0.35); }
+
+/* Card */
+.deck-card {
+    background: #0a0c18;
+    border: 1px solid var(--border-soft);
+    transition: border-color 220ms ease, transform 220ms ease;
+}
+.deck-card:hover {
+    border-color: rgba(204, 255, 0, 0.5);
+    transform: translateY(-2px);
+}
+
+/* Inputs */
+.input-tech {
+    background: #02030a;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff;
+    padding: 12px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+    transition: border-color 180ms ease;
+}
+.input-tech:focus { border-color: var(--jade-lime); }
+.input-tech::placeholder { color: #5b6478; }
+
+/* Animated dashed border ring */
+@keyframes dash-flow {
+    to { stroke-dashoffset: -32; }
+}
+.dash-ring rect {
+    fill: none;
+    stroke: var(--jade-lime);
+    stroke-width: 1.5;
+    stroke-dasharray: 6 6;
+    animation: dash-flow 1.4s linear infinite;
+}
+
+/* Scanline thin overlay */
+.scanlines {
+    background-image: repeating-linear-gradient(
+        to bottom,
+        rgba(204,255,0,0.02) 0px,
+        rgba(204,255,0,0.02) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+}
+
+/* Live dot */
+.dot {
+    display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--quantum-cyan);
+    box-shadow: 0 0 8px var(--quantum-cyan);
+    animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.25); }
+}
+
+/* Marquee ticker */
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.ticker-track {
+    display: flex;
+    width: max-content;
+    animation: ticker 38s linear infinite;
+    gap: 56px;
+}
+
+/* Reveal on mount */
+@keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.reveal { animation: fade-up 600ms ease-out both; }
+
+/* Custom scrollbar (dark) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #02030a; }
+::-webkit-scrollbar-thumb { background: #1b1f33; border: 2px solid #02030a; }
+::-webkit-scrollbar-thumb:hover { background: #2a2f4d; }
