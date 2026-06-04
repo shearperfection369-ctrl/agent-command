@@ -190,12 +190,12 @@ export default function Lighthouse() {
               </div>
               <div className="border-l-2 border-[#00ffff] pl-6">
                 <div className="mono-label text-[#00ffff] mb-2">TEXT US</div>
-                <div className="font-display font-black text-white text-3xl tracking-tighter mt-2">+1 (612)<br />555-0117</div>
+                <a href="sms:+17634434459" className="font-display font-black text-white hover:text-[#00ffff] text-3xl tracking-tighter mt-2 block">+1 (763)<br />443-4459</a>
                 <p className="text-xs text-white/55 mt-3 font-mono-tech">Text your name, company, role, industry, and the pain you want solved. JADE scores you live and replies.</p>
               </div>
               <div className="border-l-2 border-[#7c5cff] pl-6">
                 <div className="mono-label text-[#7c5cff] mb-2">CALL US</div>
-                <div className="font-display font-black text-white text-3xl tracking-tighter mt-2">+1 (612)<br />555-0117</div>
+                <a href="tel:+17634434459" className="font-display font-black text-white hover:text-[#7c5cff] text-3xl tracking-tighter mt-2 block">+1 (763)<br />443-4459</a>
                 <p className="text-xs text-white/55 mt-3 font-mono-tech">JADE picks up. Tell her about your workflow for 60 seconds. Speech → transcript → application → score, all in one call.</p>
               </div>
             </div>
@@ -314,7 +314,7 @@ export default function Lighthouse() {
                 <div className="grid sm:grid-cols-2 gap-2">
                   {[
                     { k: "case_study_consent", label: "Publish a written case study · REQUIRED", required: true },
-                    { k: "logo_consent", label: "Use our logo on jadeos.ai" },
+                    { k: "logo_consent", label: "Use our logo on onejades.com" },
                     { k: "quote_consent", label: "Use a published quote from an operator" },
                     { k: "metrics_consent", label: "Publish before/after metrics" },
                   ].map((c) => (

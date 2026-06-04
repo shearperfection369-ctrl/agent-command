@@ -696,6 +696,12 @@ PLAYBOOK_SEED = [
 ]
 
 
+@api.get("/playbooks/by-owner")
+async def playbooks_by_owner(email: EmailStr):
+    docs = await db.playbooks.find({"owner_email": email}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return docs
+
+
 @api.get("/playbooks", response_model=List[Playbook])
 async def playbooks_list(industry: Optional[str] = None):
     q = {"industry": industry} if industry else {}
@@ -1744,7 +1750,7 @@ async def twilio_sms_inbound(request: Request):
     if not parsed or not parsed.get("name"):
         reply.message(
             "JADE OS · Lighthouse program. Text APPLY with: your name, company, role, industry, the pain you want solved. "
-            "Or apply at jadeos.ai/lighthouse — JADE will score it live."
+            "Or apply at onejades.com/lighthouse — JADE will score it live."
         )
         await db.sms_inbound.insert_one({
             "id": str(uuid.uuid4()), "from_number": from_number, "body": body[:1000],
@@ -1816,7 +1822,7 @@ async def twilio_voice_inbound(request: Request):
         language="en-US",
     )
     resp.append(gather)
-    resp.say("Didn't catch that. Visit jadeos dot ai slash lighthouse, or text us back. Goodbye.")
+    resp.say("Didn't catch that. Visit one jades dot com slash lighthouse, or text us back. Goodbye.")
     return PlainTextResponse(content=str(resp), media_type="application/xml")
 
 
@@ -1838,7 +1844,7 @@ async def twilio_voice_process(request: Request):
     parsed = await _parse_inbound_to_app(transcript, from_number)
     if not parsed or not parsed.get("name"):
         resp.say(
-            "Couldn't parse a complete application. Visit jadeos dot ai slash lighthouse, or text us. Goodbye.",
+            "Couldn't parse a complete application. Visit one jades dot com slash lighthouse, or text us. Goodbye.",
             voice="Polly.Matthew-Neural",
         )
         await db.voice_calls.insert_one({
@@ -2009,12 +2015,6 @@ async def customer_playbook_create(body: CustomerPlaybookCreate):
     doc["owner_email"] = body.owner_email
     await db.playbooks.insert_one(doc)
     return pb
-
-
-@api.get("/playbooks/by-owner")
-async def playbooks_by_owner(email: EmailStr):
-    docs = await db.playbooks.find({"owner_email": email}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return docs
 
 
 # ============================================================

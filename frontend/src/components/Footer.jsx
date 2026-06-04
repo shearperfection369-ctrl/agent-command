@@ -32,11 +32,13 @@ export default function Footer() {
           </ul>
         </div>
         <div>
-          <div className="mono-label text-[#ccff00] mb-3">CONTACT</div>
+          <div className="mono-label text-[#ccff00] mb-3">CONTACT · OPERATOR</div>
           <ul className="space-y-2 text-sm text-white/70 font-mono-tech">
-            <li>OPS@JADEOS.AI</li>
-            <li>+1 (612) 555 · 0117</li>
-            <li>NORTH LOOP · MPLS</li>
+            <li className="text-white font-display font-bold not-italic text-base">OLIVER CUMMINS</li>
+            <li><a href="mailto:cummins_oliver@yahoo.com" className="hover:text-[#00ffff]">CUMMINS_OLIVER@YAHOO.COM</a></li>
+            <li><a href="tel:+17634434459" className="hover:text-[#00ffff]">+1 (763) 443-4459</a></li>
+            <li><a href="https://onejades.com" target="_blank" rel="noreferrer" className="hover:text-[#00ffff]">ONEJADES.COM</a></li>
+            <li className="text-white/40">NORTH LOOP · MPLS</li>
           </ul>
         </div>
       </div>

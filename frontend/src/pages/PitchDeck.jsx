@@ -148,7 +148,7 @@ const SLIDES = [
       { c: "#ccff00", t: "BECOME A CUSTOMER", b: "20-minute live demo on your data. NDA available. Pilot at half price for the first 5 MSP partners." },
       { c: "#00ffff", t: "BECOME AN ANGEL", b: "$100-250k strategic angel from a Minneapolis operator. We're bootstrapping — no full round required." },
     ],
-    foot: "JADEOS.AI · OPS@JADEOS.AI · +1 (612) 555-0117",
+    foot: "ONEJADES.COM · CUMMINS_OLIVER@YAHOO.COM · +1 (763) 443-4459 · OLIVER CUMMINS",
   },
 ];
 

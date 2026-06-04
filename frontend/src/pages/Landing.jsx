@@ -355,7 +355,7 @@ export default function Landing() {
                   value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
               </Field>
               <Field label="PHONE · OPTIONAL">
-                <input data-testid="lead-input-phone" className="input-tech" placeholder="(612) 555-0117"
+                <input data-testid="lead-input-phone" className="input-tech" placeholder="(763) 443-4459"
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </Field>
               <Field label="INDUSTRY">

@@ -17,7 +17,7 @@ I'm building JADE OS — AI agents that handle Tier-1 support, document extracti
 20 minutes next week to walk you through a live demo on one of your real workflows? I'll come to the office.
 
 — {{founder_first}}, JADE OS
-(612) 555-0117 · jadeos.ai`,
+(763) 443-4459 · onejades.com`,
   },
   email_followup: {
     label: "EMAIL · FOLLOW-UP (ANY VERTICAL)",
@@ -70,7 +70,7 @@ Vault · Custom · unlimited + on-prem
 NEXT STEP
 20-minute live demo on one of YOUR real workflows. We come to the office. NDA available. Pilot at half-price for the first 5 MSP partners.
 
-jadeos.ai · ops@jadeos.ai · (612) 555-0117`,
+onejades.com · cummins_oliver@yahoo.com · (763) 443-4459 · Oliver Cummins`,
   },
 };
 

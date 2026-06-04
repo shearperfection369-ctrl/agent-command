@@ -71,7 +71,7 @@ export default function EmbedReel() {
           </div>
         </div>
         <div className="mt-3 text-center">
-          <a href="https://jadeos.ai" target="_blank" rel="noreferrer" className="font-mono-tech text-[9px] tracking-[0.3em] text-[#00ffff] hover:text-[#ccff00]">▶ POWERED BY JADE OS · TRY IT</a>
+          <a href="https://onejades.com" target="_blank" rel="noreferrer" className="font-mono-tech text-[9px] tracking-[0.3em] text-[#00ffff] hover:text-[#ccff00]">▶ POWERED BY JADE OS · ONEJADES.COM</a>
         </div>
       </div>
     </div>
