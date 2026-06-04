@@ -16,18 +16,11 @@ After 1st pivot: app must be **universal** — not freight-only. Agents must ser
 - Admin (JADE founder) — reviews leads, watches agent run tape.
 
 ## What's implemented (2026-02)
-- Landing page (hero, 6-agent bento, 8-vertical grid, 4-phase deployment, 3-tier pricing, lead-capture form).
-- Interactive Agent Demo: 5 tabs (Chat / Extract / Outreach / Qualify / Support Triage) × 11 industries × 2 providers.
-- Streaming SSE chat with industry-tuned prompts.
-- Public lead capture; JWT-protected admin dashboard with leads queue + agent run tape + stats.
-- Business Plan page (8 sections, rendered + downloadable PDF).
-- Launch Kit page (5 outreach assets, 10-row cross-vertical target list, channel order-of-ops, downloadable PDF).
-- Admin auth seeded from env on startup.
-- 30/30 backend tests passing.
+- **Public**: Landing (universal hero + 6-agent bento + 8-vertical grid + 4-phase deployment + 3-tier pricing + lead capture). Demo Reel (5 scenes, autoplay, live LLM streaming). Console / Agent Demo (5 agent tabs × 11 industries × 2 providers + PDF upload). Pitch Deck (13-slide interactive deck + PDF download). Business Plan + Launch Kit (rendered + PDF). Case Studies (3 seeded, public, slug-routed). Customer Portal preview (read-only by email). Billing/Stripe Checkout (3 tiers, success page polls until paid).
+- **Admin**: JWT login → Mission Control dashboard with 5 tabs (Leads · Agent Runs · Orgs · Webhooks · Knowledge Base). Stats cards (leads, runs, paid orgs, est. tokens). Webhook register/test/delete (Slack + CRM + generic). KB doc CRUD powering /api/kb/ask RAG. Org registry + usage analytics.
+- **Backend**: 30 (iter-1) + 26 (iter-2) = **56 tests passing**. New endpoints: `/api/agent/extract-pdf` (pypdf), `/api/kb/docs`, `/api/kb/ask` (RAG-lite), `/api/webhooks*` + `/api/webhooks/{id}/dispatch` (httpx delivery + log), `/api/billing/checkout` + `/api/billing/status/{sid}` + `/api/webhook/stripe`, `/api/orgs` + `/api/orgs/usage`, `/api/case-studies` (+ slug), `/api/portal/preview`. Three case studies auto-seeded on startup.
+- Admin credentials in `/app/memory/test_credentials.md`.
 
 ## Backlog
-- **P1**: Voice / call center agent (Twilio + Whisper). CRM/Slack/email webhook delivery for approved actions. Multi-tenant org model (so customers can self-serve).
-- **P1**: Per-industry sample document upload (PDF parsing — currently text only). Stripe billing on three pricing tiers.
-- **P2**: Public case-study pages with metrics. Customer-portal preview (read-only run history). Multi-user roles inside an org.
-- **P2**: Knowledge-base RAG for support agent (upload FAQ docs).
-- **P2**: Per-customer LLM token budgets + automatic model routing (Sonnet → Haiku for cheap calls).
+- **P2**: Voice agent (Twilio + Whisper). Stripe customer portal link for self-serve subscription mgmt. SSO for the customer portal. Per-customer LLM token budgets with hard caps.
+- **P3**: Vector-DB upgrade for the KB (currently keyword/full-text). Webhook delivery retry queue. ICP-templated case-study generation. Embed-anywhere widget for the Demo Reel.
