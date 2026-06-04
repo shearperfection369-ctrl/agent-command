@@ -9,6 +9,12 @@ import BusinessPlan from "@/pages/BusinessPlan";
 import LaunchKit from "@/pages/LaunchKit";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import PitchDeck from "@/pages/PitchDeck";
+import DemoReel from "@/pages/DemoReel";
+import { CaseStudiesIndex, CaseStudyDetail } from "@/pages/CaseStudies";
+import Billing from "@/pages/Billing";
+import BillingSuccess from "@/pages/BillingSuccess";
+import Portal from "@/pages/Portal";
 
 function App() {
   return (
@@ -32,8 +38,15 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/demo" element={<AgentDemo />} />
+          <Route path="/reel" element={<DemoReel />} />
+          <Route path="/deck" element={<PitchDeck />} />
           <Route path="/plan" element={<BusinessPlan />} />
           <Route path="/launch" element={<LaunchKit />} />
+          <Route path="/cases" element={<CaseStudiesIndex />} />
+          <Route path="/cases/:slug" element={<CaseStudyDetail />} />
+          <Route path="/billing" element={<Billing />} />
+          <Route path="/billing/success" element={<BillingSuccess />} />
+          <Route path="/portal" element={<Portal />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<Dashboard />} />
         </Routes>

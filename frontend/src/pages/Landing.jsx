@@ -107,10 +107,11 @@ export default function Landing() {
               Six production-grade agents — support, sales-qual, data extraction, ops automation, outreach, and an ops co-pilot — tuned to your vertical out of the box. Built on Claude Sonnet 4.5 and GPT-5.2. No prompt engineering required.
             </p>
             <div className="mt-10 flex flex-wrap gap-3">
-              <Link to="/demo" data-testid="hero-cta-demo" className="btn-jade inline-flex items-center gap-2">
-                TRY ANY AGENT · ANY INDUSTRY <ArrowRight size={16} weight="bold" />
+              <Link to="/reel" data-testid="hero-cta-reel" className="btn-jade inline-flex items-center gap-2">
+                WATCH JADE HANDLE 5 REAL JOBS <ArrowRight size={16} weight="bold" />
               </Link>
-              <a href="#book" data-testid="hero-cta-book" className="btn-ghost">BOOK A 20-MIN OPS REVIEW</a>
+              <Link to="/demo" data-testid="hero-cta-demo" className="btn-ghost">OPEN THE CONSOLE</Link>
+              <a href="#book" data-testid="hero-cta-book" className="btn-ghost">BOOK A 20-MIN REVIEW</a>
             </div>
 
             <div className="mt-12 flex flex-wrap gap-2">

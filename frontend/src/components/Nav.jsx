@@ -3,9 +3,12 @@ import { isAuthed, clearToken } from "../lib/auth";
 
 const links = [
   { to: "/", label: "Home" },
-  { to: "/demo", label: "Demo" },
-  { to: "/plan", label: "Business Plan" },
-  { to: "/launch", label: "Launch Kit" },
+  { to: "/reel", label: "Demo Reel" },
+  { to: "/demo", label: "Console" },
+  { to: "/deck", label: "Pitch Deck" },
+  { to: "/cases", label: "Cases" },
+  { to: "/plan", label: "Plan" },
+  { to: "/billing", label: "Pricing" },
 ];
 
 export default function Nav() {

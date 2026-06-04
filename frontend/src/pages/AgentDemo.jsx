@@ -279,6 +279,7 @@ function ExtractPanel({ provider, industry }) {
   const [text, setText] = useState(sample.extract);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   const run = async () => {
     setLoading(true); setResult(null);
@@ -291,12 +292,35 @@ function ExtractPanel({ provider, industry }) {
     } finally { setLoading(false); }
   };
 
+  const onPdf = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadBusy(true); setResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("industry", industry);
+      fd.append("provider", provider);
+      const { data } = await api.post("/agent/extract-pdf", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setResult(data.extracted);
+      toast.success(`Parsed ${file.name}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "PDF parse failed.");
+    } finally { setUploadBusy(false); e.target.value = ""; }
+  };
+
   return (
     <div className="grid lg:grid-cols-2 gap-6">
       <div className="deck-card p-6 relative" data-testid="extract-input-panel">
         <CornerBrackets />
-        <div className="mono-label text-[#00ffff] mb-4">INPUT · DOC / FORM / TICKET · {industry.replace("_", " ").toUpperCase()}</div>
-        <textarea data-testid="extract-input" value={text} onChange={(e) => setText(e.target.value)} rows={20} className="input-tech font-mono-tech text-xs" spellCheck={false} />
+        <div className="flex items-center justify-between mb-4">
+          <div className="mono-label text-[#00ffff]">INPUT · DOC / FORM / TICKET · {industry.replace("_", " ").toUpperCase()}</div>
+          <label className="mono-label text-[#ccff00] hover:text-white cursor-pointer">
+            {uploadBusy ? "PARSING PDF…" : "↑ UPLOAD PDF"}
+            <input data-testid="extract-pdf-input" type="file" accept="application/pdf" className="hidden" onChange={onPdf} disabled={uploadBusy} />
+          </label>
+        </div>
+        <textarea data-testid="extract-input" value={text} onChange={(e) => setText(e.target.value)} rows={18} className="input-tech font-mono-tech text-xs" spellCheck={false} />
         <div className="mt-4 flex gap-3">
           <button data-testid="extract-run-btn" onClick={run} disabled={loading} className="btn-jade inline-flex items-center gap-2">
             {loading ? <><ArrowsClockwise size={14} weight="bold" className="animate-spin" /> PARSING…</> : <>RUN EXTRACTION <ArrowRight size={14} weight="bold" /></>}

@@ -21,9 +21,14 @@ export default function Footer() {
           <div className="mono-label text-[#ccff00] mb-3">SYSTEM</div>
           <ul className="space-y-2 text-sm text-white/70">
             <li><Link className="hover:text-[#00ffff]" to="/">Home</Link></li>
-            <li><Link className="hover:text-[#00ffff]" to="/demo">Live Demo</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/reel">Demo Reel</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/demo">Console</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/deck">Pitch Deck</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/cases">Case Studies</Link></li>
             <li><Link className="hover:text-[#00ffff]" to="/plan">Business Plan</Link></li>
             <li><Link className="hover:text-[#00ffff]" to="/launch">Launch Kit</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/billing">Pricing</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/portal">Customer Portal</Link></li>
           </ul>
         </div>
         <div>
