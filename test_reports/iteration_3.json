@@ -1,0 +1,46 @@
+{
+  "summary": "JADE OS P3 backend testing complete — MOAT (Schema Library, Prompt Library, Playbooks, Model Router, schema corrections, moat stats/admin) + LIGHTHOUSE Customer Program (apply, list, patch, stats, agent-run logging). Added 30 new pytest cases in /app/backend/tests/backend_test_p3.py — ALL 30 PASSED. Regression of prior 56 tests (iter1 + iter2): 55 passed first run, 1 flaky failure (test_extract_pdf_happy) due to upstream OpenAI provider 'Budget exceeded' 500 — passed on retry. No code bugs introduced. Total backend coverage: 86 tests across 3 files.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/agent/extract (PDF path)", "issue": "Transient 500 from underlying OpenAI provider due to 'Budget has been exceeded' (litellm.BadRequestError). Not a JADE bug — upstream LLM quota. Test passes on retry. Recommend graceful fallback to alternate provider when one provider's budget is exhausted (currently surfaces raw 500)."},
+      {"endpoint": "/api/lighthouse/apply", "issue": "Synchronous LLM call (10–20s) inside POST. For form submission UX, consider scoring asynchronously and returning immediately with score=null + tier='pending', or stream the score back. Public endpoint can be DoS'd by triggering many LLM calls (no rate limit)."},
+      {"endpoint": "/api/playbooks/run", "issue": "Public (no auth) and chains 2–3 LLM calls per request — same DoS surface as above. Consider auth or basic IP rate-limit."},
+      {"endpoint": "/api/prompts/run", "issue": "Public (no auth) — anyone can drive LLM spend. Recommend admin-only or rate-limit by IP/session."},
+      {"endpoint": "/api/lighthouse/applications", "issue": "No pagination — returns up to 200. Fine now, will need pagination at scale."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test_p3.py",
+    "/app/backend/tests/backend_test_p2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_p3_results.xml",
+    "/app/test_reports/pytest/pytest_regression_p3.xml"
+  ],
+  "action_items": [
+    "Add IP/session rate-limit (or auth) to public LLM-driving endpoints: /api/lighthouse/apply, /api/playbooks/run, /api/prompts/run. They can be abused to drain LLM budget.",
+    "Wrap LLM provider errors (e.g. 'Budget exceeded') and fall back to alternate provider in MODEL_ROUTING instead of raising 500. Currently a hard provider failure breaks the endpoint.",
+    "Consider async/background scoring for /api/lighthouse/apply so form submission returns instantly.",
+    "server.py is now 1729 lines — well past the 700-line guideline. Recommend splitting into routers: moat.py (schemas+prompts+playbooks), lighthouse.py, billing.py, kb.py, webhooks.py, agents.py.",
+    "Add pagination (?limit&offset or cursor) to /api/lighthouse/applications and /api/playbook-runs before scaling."
+  ],
+  "critical_code_review_comments": [
+    "server.py = 1729 lines — over 2x the 700-line guideline. Must be modularized into routers for maintainability.",
+    "PROMPT_SEED & PLAYBOOK_SEED & SCHEMA_SEED use $setOnInsert-style seeding (presumed at startup) — content edits to seeds won't reflect on existing DB rows. Document this or version-bump on change.",
+    "/api/lighthouse/apply runs an LLM call inline on a PUBLIC endpoint with no rate limit — DoS / cost-abuse vector.",
+    "/api/playbooks/run is public and chains multiple LLM calls — same DoS vector and bigger cost amplifier (2-3x per request).",
+    "/api/prompts/run is public and lets a caller execute ANY stored prompt with arbitrary variables. Combined with arbitrary {{var}} interpolation, this is effectively user-controlled LLM access. Lock down or rate-limit.",
+    "_score_lighthouse catches all LLM/parse exceptions and returns score=None silently — admin won't know the auto-scorer is broken. Log + surface a 'scorer_failed' flag.",
+    "Playbook step error handling logs exceptions but step.status defaults to 'ok' unless explicitly set — verify failed steps mark status='error' (couldn't fully audit in this iteration since happy-path passed).",
+    "Schema correction endpoint accepts arbitrary org_email without verifying caller owns that tenant — multi-tenant trust issue."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test_p3.py"],
+  "success_rate": {"backend": "100% (86/86: 30 P3 new + 26 P2 + 30 P1, after 1 flaky retry on LLM budget error)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@jadeos.ai / JadeOS!2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Ephemeral test data: TEST_p3_schema (with correction), TEST_p3_prompt (created+deleted), TEST_p3_pb playbook, 2 lighthouse applications (TEST_sarah_p3 + TEST_cold_p3), 1 freight_load_intake playbook_run, and ~6 new agent_runs from LLM calls. All TEST_ prefixed — main agent can purge with db.lighthouse_applications.delete_many({'email': /TEST_/}) etc.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Three pytest files in /app/backend/tests: backend_test.py (P1, 30 tests), backend_test_p2.py (P2, 26 tests), backend_test_p3.py (P3, 30 tests). All XMLs in /app/test_reports/pytest/. Cumulative 86 tests; ~30s for P3 alone, ~90s for full regression. NOTE: test_extract_pdf_happy is flaky — depends on OpenAI provider having budget. Retry if it fails with 'Budget exceeded'. Backend server.py is 1729 lines and needs router-splitting.",
+  "rca of the issue": "No new bugs introduced this round. The single flaky regression failure (test_extract_pdf_happy) RCA: OpenAI provider hit a 'Max budget' soft cap returning 500 via litellm. JADE doesn't catch/retry across providers, so the 500 propagates. Mitigation: catch provider budget errors and silently fall back to the alternate provider in MODEL_ROUTING (or to Anthropic for OpenAI failures and vice versa). Reproduction: not deterministic — depends on provider budget state at the time of test. Mitigation in test: retry once on 500 from provider budget error."
+}

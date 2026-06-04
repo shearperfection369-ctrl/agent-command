@@ -88,6 +88,74 @@ class LeadCreate(BaseModel):
     company_size: Optional[str] = None
     use_case: Optional[str] = None
     monthly_volume: Optional[str] = None
+    source: Optional[str] = "website"
+
+
+# ============================================================
+# LIGHTHOUSE CUSTOMER PROGRAM
+# ============================================================
+# A separate, higher-intent application flow for prospects willing to be a published case study
+# in exchange for: 50% off year 1, hands-on white-glove implementation, named engineer, co-marketing.
+# JADE auto-scores every application using the qualification agent.
+# ============================================================
+
+class LighthouseApplication(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # Operator
+    name: str
+    title: str
+    email: EmailStr
+    phone: Optional[str] = None
+    # Company
+    company: str
+    industry: str = "freight_brokerage"
+    company_size: str = "11-50"  # "1-10" | "11-50" | "51-200" | "201-1000" | "1000+"
+    website: Optional[str] = None
+    # Fit
+    primary_pain: str  # one of: support_overflow, doc_overload, lead_chaos, ops_drift, content_grind, other
+    pain_detail: str  # free text
+    target_outcome: str  # e.g. "cut tier-1 response from 11h → 1h"
+    timeline: str = "30_days"  # "14_days" | "30_days" | "60_days" | "90_plus"
+    decision_authority: str = "decision_maker"  # "decision_maker" | "influencer" | "researcher"
+    budget_band: str = "1500_4500"  # "<1500" | "1500_4500" | "4500_10000" | "10000+"
+    # Case study willingness
+    case_study_consent: bool = False
+    logo_consent: bool = False
+    quote_consent: bool = False
+    metrics_consent: bool = False
+    # Auto-scored by JADE
+    score: Optional[int] = None
+    tier: Optional[str] = None  # "hot" | "warm" | "cold"
+    rationale: Optional[str] = None
+    next_action: Optional[str] = None
+    green_flags: List[str] = []
+    red_flags: List[str] = []
+    # Status workflow
+    status: str = "new"  # "new" | "screening" | "interview_scheduled" | "selected" | "pilot_live" | "case_published" | "passed"
+    notes: Optional[str] = None
+    created_at: str = Field(default_factory=_utcnow_iso)
+
+
+class LighthouseCreate(BaseModel):
+    name: str
+    title: str
+    email: EmailStr
+    phone: Optional[str] = None
+    company: str
+    industry: str = "freight_brokerage"
+    company_size: str = "11-50"
+    website: Optional[str] = None
+    primary_pain: str
+    pain_detail: str
+    target_outcome: str
+    timeline: str = "30_days"
+    decision_authority: str = "decision_maker"
+    budget_band: str = "1500_4500"
+    case_study_consent: bool = False
+    logo_consent: bool = False
+    quote_consent: bool = False
+    metrics_consent: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -255,6 +323,555 @@ def _strip_json(text: str) -> str:
     return t
 
 
+# ============================================================
+# THE MOAT — Proprietary IP layers that lock customers in
+# ============================================================
+# These layers turn JADE OS from "thin LLM wrapper" into a defensible product:
+#   1. Schema Library      — versioned, customer-tuned extraction schemas
+#   2. Prompt Library      — versioned, named prompts with A/B variants
+#   3. Playbooks           — multi-step workflows chained as code (not single LLM calls)
+#   4. Model Router        — automatic per-task model selection (margin defense)
+#   5. Run Analytics       — accuracy/latency/cost tracking that compounds over time
+#
+# Customer corrections feed back into OUR schemas. Their playbooks live in OUR DB.
+# Switching providers (Anthropic ↔ OpenAI) is silent — model routing is OUR layer.
+# ============================================================
+
+# ---------- Model Router (margin defense) ----------
+# Each task profile carries a preferred provider+model + a budget tier.
+# When prices shift, we re-tier silently. Customer code never changes.
+MODEL_ROUTING = {
+    # Cheap/fast tasks — short triage, classification
+    "fast": [("anthropic", "claude-haiku-4-5-20251001"), ("openai", "gpt-5-mini")],
+    # Default — extraction, drafting, qualification
+    "default": [("anthropic", "claude-sonnet-4-5-20250929"), ("openai", "gpt-5.2")],
+    # Reasoning-heavy — playbook orchestration, complex extraction
+    "smart": [("anthropic", "claude-opus-4-7"), ("openai", "gpt-5.4")],
+}
+
+
+def _route_model(profile: str, provider_override: Optional[str] = None) -> tuple[str, str]:
+    """Return (provider, model) for a task profile. Customer can pin a provider."""
+    options = MODEL_ROUTING.get(profile, MODEL_ROUTING["default"])
+    if provider_override:
+        for prov, mdl in options:
+            if prov == provider_override:
+                return prov, mdl
+    return options[0]
+
+
+# ---------- Schema Library ----------
+# Versioned extraction schemas. Customer corrections create new versions.
+class SchemaField(BaseModel):
+    name: str
+    type: Literal["string", "number", "date", "boolean", "array", "object"] = "string"
+    required: bool = False
+    description: Optional[str] = None
+    redact: bool = False  # for PHI/PII fields
+
+
+class ExtractionSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    slug: str  # e.g. "freight_bol", "healthcare_intake"
+    industry: str
+    version: int = 1
+    name: str
+    description: Optional[str] = None
+    fields: List[SchemaField] = []
+    parent_id: Optional[str] = None  # links to previous version
+    org_email: Optional[str] = None  # tenant scope; None = global default
+    correction_count: int = 0
+    created_at: str = Field(default_factory=_utcnow_iso)
+
+
+class SchemaCreate(BaseModel):
+    slug: str
+    industry: str
+    name: str
+    description: Optional[str] = None
+    fields: List[SchemaField] = []
+    org_email: Optional[str] = None
+
+
+class SchemaCorrection(BaseModel):
+    schema_id: str
+    run_id: Optional[str] = None
+    original_output: Dict[str, Any]
+    corrected_output: Dict[str, Any]
+    notes: Optional[str] = None
+    org_email: Optional[str] = None
+
+
+SCHEMA_SEED = [
+    {
+        "slug": "freight_bol", "industry": "freight_brokerage", "name": "Freight BOL · v1",
+        "description": "Bill of Lading / load posting for freight brokers and 3PLs",
+        "fields": [
+            {"name": "origin_city", "type": "string", "required": True},
+            {"name": "origin_state", "type": "string", "required": True},
+            {"name": "dest_city", "type": "string", "required": True},
+            {"name": "dest_state", "type": "string", "required": True},
+            {"name": "equipment", "type": "string"},
+            {"name": "weight_lbs", "type": "number"},
+            {"name": "pickup_date", "type": "date"},
+            {"name": "delivery_date", "type": "date"},
+            {"name": "rate_usd", "type": "number"},
+            {"name": "miles", "type": "number"},
+            {"name": "mc_number", "type": "string"},
+            {"name": "commodity", "type": "string"},
+            {"name": "contact_name", "type": "string"},
+            {"name": "contact_phone", "type": "string"},
+        ],
+    },
+    {
+        "slug": "healthcare_intake", "industry": "healthcare", "name": "Patient Intake · v1",
+        "description": "Patient intake form — PHI fields auto-redacted in logs",
+        "fields": [
+            {"name": "patient_name", "type": "string", "required": True, "redact": True},
+            {"name": "dob", "type": "date", "redact": True},
+            {"name": "member_id", "type": "string", "redact": True},
+            {"name": "insurer", "type": "string"},
+            {"name": "visit_date", "type": "date"},
+            {"name": "provider", "type": "string"},
+            {"name": "diagnosis_codes", "type": "array"},
+            {"name": "cpt_codes", "type": "array"},
+            {"name": "prior_auth_id", "type": "string"},
+            {"name": "prior_auth_status", "type": "string"},
+        ],
+    },
+    {
+        "slug": "saas_order_form", "industry": "saas", "name": "SaaS Order Form · v1",
+        "description": "B2B SaaS order form / contract summary",
+        "fields": [
+            {"name": "account_name", "type": "string", "required": True},
+            {"name": "plan", "type": "string"},
+            {"name": "seats", "type": "number"},
+            {"name": "mrr_usd", "type": "number"},
+            {"name": "term_months", "type": "number"},
+            {"name": "start_date", "type": "date"},
+            {"name": "renewal_date", "type": "date"},
+            {"name": "owner", "type": "string"},
+            {"name": "addons", "type": "array"},
+        ],
+    },
+    {
+        "slug": "manufacturing_po", "industry": "manufacturing", "name": "Manufacturing PO · v1",
+        "description": "Purchase order for industrial procurement",
+        "fields": [
+            {"name": "po_number", "type": "string", "required": True},
+            {"name": "vendor", "type": "string", "required": True},
+            {"name": "buyer", "type": "string"},
+            {"name": "items", "type": "array"},
+            {"name": "total_usd", "type": "number"},
+            {"name": "required_by", "type": "date"},
+            {"name": "terms", "type": "string"},
+        ],
+    },
+]
+
+
+def _schema_prompt(s: dict) -> str:
+    """Build a strict JSON schema prompt from a stored ExtractionSchema."""
+    lines = [
+        f"Extract the input into JSON matching THIS exact schema (version {s.get('version', 1)} · {s['name']}):",
+    ]
+    for f in s.get("fields", []):
+        marker = "*" if f.get("required") else ""
+        redact = " (REDACT with '***' in logs but keep structure)" if f.get("redact") else ""
+        desc = f" — {f['description']}" if f.get("description") else ""
+        lines.append(f"  {f['name']}{marker}: {f['type']}{desc}{redact}")
+    lines.append("Return ONLY a JSON object with these exact keys. Unknown fields → null. Numbers as numbers, dates ISO YYYY-MM-DD.")
+    return "\n".join(lines)
+
+
+@api.get("/schemas", response_model=List[ExtractionSchema])
+async def schemas_list(industry: Optional[str] = None, org_email: Optional[str] = None):
+    q = {}
+    if industry: q["industry"] = industry
+    if org_email: q["$or"] = [{"org_email": org_email}, {"org_email": None}]
+    docs = await db.schemas.find(q, {"_id": 0}).sort([("industry", 1), ("created_at", -1)]).to_list(200)
+    return [ExtractionSchema(**d) for d in docs]
+
+
+@api.get("/schemas/{slug}", response_model=ExtractionSchema)
+async def schema_get(slug: str, org_email: Optional[str] = None):
+    """Get latest version of a schema. Tenant override wins over global."""
+    q = {"slug": slug}
+    if org_email:
+        tenant = await db.schemas.find_one({"slug": slug, "org_email": org_email}, {"_id": 0}, sort=[("version", -1)])
+        if tenant:
+            return ExtractionSchema(**tenant)
+    doc = await db.schemas.find_one({"slug": slug, "org_email": None}, {"_id": 0}, sort=[("version", -1)])
+    if not doc:
+        raise HTTPException(404, "Schema not found")
+    return ExtractionSchema(**doc)
+
+
+@api.post("/schemas", response_model=ExtractionSchema)
+async def schema_create(body: SchemaCreate, _: str = Depends(require_admin)):
+    s = ExtractionSchema(**body.model_dump())
+    await db.schemas.insert_one(s.model_dump())
+    return s
+
+
+@api.post("/schemas/{schema_id}/correct")
+async def schema_correct(schema_id: str, body: SchemaCorrection, _: str = Depends(require_admin)):
+    """Record a customer correction. Increments correction_count.
+    The longer customers use JADE, the more our schemas improve from THEIR data."""
+    parent = await db.schemas.find_one({"id": schema_id}, {"_id": 0})
+    if not parent:
+        raise HTTPException(404, "Schema not found")
+    await db.schema_corrections.insert_one({
+        "id": str(uuid.uuid4()),
+        "schema_id": schema_id,
+        "run_id": body.run_id,
+        "original_output": body.original_output,
+        "corrected_output": body.corrected_output,
+        "notes": body.notes,
+        "org_email": body.org_email,
+        "created_at": _utcnow_iso(),
+    })
+    await db.schemas.update_one({"id": schema_id}, {"$inc": {"correction_count": 1}})
+    return {"ok": True, "schema_id": schema_id}
+
+
+# ---------- Prompt Library ----------
+class PromptTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    slug: str
+    industry: str = "general"
+    name: str
+    template: str
+    variables: List[str] = []
+    variant: str = "A"  # A/B testing
+    version: int = 1
+    org_email: Optional[str] = None
+    created_at: str = Field(default_factory=_utcnow_iso)
+
+
+class PromptCreate(BaseModel):
+    slug: str
+    industry: str = "general"
+    name: str
+    template: str
+    variables: List[str] = []
+    variant: str = "A"
+    org_email: Optional[str] = None
+
+
+PROMPT_SEED = [
+    {
+        "slug": "carrier_outreach_v1", "industry": "freight_brokerage", "name": "Freight · Carrier Outreach (operator-blunt)",
+        "template": "Write a short carrier outreach email. Subject line starts 'Subject:'. 5–8 sentences. Direct ask. Include lane, equipment, rate, pickup window, MC number. No fluff.\n\nLOAD: {{load_summary}}\nCARRIER: {{recipient}}",
+        "variables": ["load_summary", "recipient"],
+    },
+    {
+        "slug": "patient_followup_v1", "industry": "healthcare", "name": "Healthcare · Patient Follow-up (courteous-direct)",
+        "template": "Draft a patient follow-up. Warm but efficient. Confirm visit/test details, prior auth status, next steps. 4–6 sentences. No medical advice.\n\nCONTEXT: {{summary}}\nPATIENT: {{recipient}}",
+        "variables": ["summary", "recipient"],
+    },
+    {
+        "slug": "renewal_email_v1", "industry": "saas", "name": "SaaS · Renewal Email (consultative)",
+        "template": "Write a renewal email to a customer. Reference usage growth, propose terms, soft CTA for a 15-min call. 5–7 sentences.\n\nACCOUNT: {{recipient}}\nDETAILS: {{summary}}",
+        "variables": ["recipient", "summary"],
+    },
+]
+
+
+@api.get("/prompts", response_model=List[PromptTemplate])
+async def prompts_list(industry: Optional[str] = None):
+    q = {"industry": industry} if industry else {}
+    docs = await db.prompts.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return [PromptTemplate(**d) for d in docs]
+
+
+@api.post("/prompts", response_model=PromptTemplate)
+async def prompt_create(body: PromptCreate, _: str = Depends(require_admin)):
+    p = PromptTemplate(**body.model_dump())
+    await db.prompts.insert_one(p.model_dump())
+    return p
+
+
+@api.delete("/prompts/{pid}")
+async def prompt_delete(pid: str, _: str = Depends(require_admin)):
+    await db.prompts.delete_one({"id": pid})
+    return {"ok": True}
+
+
+class PromptRunRequest(BaseModel):
+    slug: str
+    variables: Dict[str, str]
+    industry: str = "general"
+    profile: Literal["fast", "default", "smart"] = "default"
+    provider: Optional[Literal["anthropic", "openai"]] = None
+
+
+@api.post("/prompts/run")
+async def prompt_run(body: PromptRunRequest):
+    """Run a stored prompt by slug. Variables substituted via {{name}} interpolation."""
+    p = await db.prompts.find_one({"slug": body.slug}, {"_id": 0}, sort=[("version", -1)])
+    if not p:
+        raise HTTPException(404, "Prompt not found")
+    rendered = p["template"]
+    for k, v in body.variables.items():
+        rendered = rendered.replace("{{" + k + "}}", str(v))
+    provider, model = _route_model(body.profile, body.provider)
+    session = str(uuid.uuid4())
+    chat = _llm(session, _system_for(body.industry, "execute the prompt template precisely"), provider, model)
+    out = []
+    async for ev in chat.stream_message(UserMessage(text=rendered)):
+        if isinstance(ev, TextDelta):
+            out.append(ev.content)
+        elif isinstance(ev, StreamDone):
+            break
+    text = "".join(out)
+    await _log_run("chat", provider, model, f"[prompt:{body.slug}] {rendered[:200]}", text)
+    return {"output": text, "prompt_slug": body.slug, "provider": provider, "model": model}
+
+
+# ---------- Playbooks (multi-step workflows) ----------
+# The killer feature. This is what Zapier + ChatGPT cannot replicate.
+class PlaybookStep(BaseModel):
+    kind: Literal["extract", "qualify", "draft_outreach", "support_triage", "chat", "match"]
+    label: str
+    config: Dict[str, Any] = {}
+    # `from` lets a step reference previous step output, e.g. {"summary": "$0.email"}
+
+
+class Playbook(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    slug: str
+    industry: str
+    name: str
+    description: Optional[str] = None
+    steps: List[PlaybookStep] = []
+    created_at: str = Field(default_factory=_utcnow_iso)
+
+
+class PlaybookCreate(BaseModel):
+    slug: str
+    industry: str
+    name: str
+    description: Optional[str] = None
+    steps: List[PlaybookStep] = []
+
+
+PLAYBOOK_SEED = [
+    {
+        "slug": "freight_load_intake",
+        "industry": "freight_brokerage",
+        "name": "Freight · Load Intake → Carrier Outreach",
+        "description": "Paste raw load posting → extract → draft outreach email. End-to-end in one call.",
+        "steps": [
+            {"kind": "extract", "label": "Parse load posting", "config": {"schema_slug": "freight_bol"}},
+            {"kind": "draft_outreach", "label": "Draft carrier outreach", "config": {"prompt_slug": "carrier_outreach_v1"}},
+        ],
+    },
+    {
+        "slug": "healthcare_intake_triage",
+        "industry": "healthcare",
+        "name": "Healthcare · Intake → Triage",
+        "description": "Parse intake form → triage urgency → draft confirmation",
+        "steps": [
+            {"kind": "extract", "label": "Parse intake form", "config": {"schema_slug": "healthcare_intake"}},
+            {"kind": "support_triage", "label": "Triage urgency"},
+        ],
+    },
+    {
+        "slug": "saas_inbound_lead",
+        "industry": "saas",
+        "name": "SaaS · Inbound Lead → Qualified",
+        "description": "Score inbound lead → draft tailored outreach if hot",
+        "steps": [
+            {"kind": "qualify", "label": "Qualify the lead"},
+            {"kind": "draft_outreach", "label": "Draft outreach (if hot)"},
+        ],
+    },
+]
+
+
+@api.get("/playbooks", response_model=List[Playbook])
+async def playbooks_list(industry: Optional[str] = None):
+    q = {"industry": industry} if industry else {}
+    docs = await db.playbooks.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return [Playbook(**d) for d in docs]
+
+
+@api.get("/playbooks/{slug}", response_model=Playbook)
+async def playbook_get(slug: str):
+    doc = await db.playbooks.find_one({"slug": slug}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Playbook not found")
+    return Playbook(**doc)
+
+
+@api.post("/playbooks", response_model=Playbook)
+async def playbook_create(body: PlaybookCreate, _: str = Depends(require_admin)):
+    p = Playbook(**body.model_dump())
+    await db.playbooks.insert_one(p.model_dump())
+    return p
+
+
+class PlaybookRunRequest(BaseModel):
+    slug: str
+    input: str  # raw text for step 0
+    industry: Optional[str] = None
+    provider: Literal["anthropic", "openai"] = "anthropic"
+
+
+@api.post("/playbooks/run")
+async def playbook_run(body: PlaybookRunRequest):
+    """Execute a multi-step playbook. Returns each step's output + final.
+    This is the moat: customers build playbooks once, run forever, and we own the orchestration."""
+    pb = await db.playbooks.find_one({"slug": body.slug}, {"_id": 0})
+    if not pb:
+        raise HTTPException(404, "Playbook not found")
+    industry = body.industry or pb["industry"]
+    outputs = []
+    current_text = body.input
+    run_id = str(uuid.uuid4())
+    started = datetime.now(timezone.utc)
+
+    for i, step in enumerate(pb["steps"]):
+        kind = step["kind"]
+        cfg = step.get("config", {})
+        step_out: Dict[str, Any] = {"kind": kind, "label": step.get("label")}
+        try:
+            if kind == "extract":
+                slug = cfg.get("schema_slug")
+                schema_doc = None
+                if slug:
+                    schema_doc = await db.schemas.find_one({"slug": slug, "org_email": None}, {"_id": 0}, sort=[("version", -1)])
+                sys_msg = (
+                    f"You are JADE extraction for {industry}. "
+                    + (_schema_prompt(schema_doc) if schema_doc else f"Extract to JSON. Use null for unknown fields.")
+                )
+                provider, model = _route_model("default", body.provider)
+                chat = _llm(f"{run_id}-{i}", sys_msg, provider, model)
+                raw = []
+                async for ev in chat.stream_message(UserMessage(text=current_text)):
+                    if isinstance(ev, TextDelta): raw.append(ev.content)
+                    elif isinstance(ev, StreamDone): break
+                try:
+                    data = json.loads(_strip_json("".join(raw)))
+                except Exception:
+                    data = {"raw": "".join(raw), "parse_error": True}
+                step_out["output"] = data
+                step_out["schema_used"] = schema_doc.get("slug") if schema_doc else None
+                # Build a brief text summary for next step input
+                current_text = json.dumps(data)[:1500]
+
+            elif kind == "draft_outreach":
+                prov, model = _route_model("default", body.provider)
+                chat = _llm(f"{run_id}-{i}", _system_for(industry, "draft outreach email — subject first, 5-8 sentences, direct"), prov, model)
+                prompt = f"Context (from previous step):\n{current_text}\n\nDraft the email."
+                raw = []
+                async for ev in chat.stream_message(UserMessage(text=prompt)):
+                    if isinstance(ev, TextDelta): raw.append(ev.content)
+                    elif isinstance(ev, StreamDone): break
+                email = "".join(raw).strip()
+                step_out["output"] = {"email": email}
+                current_text = email[:1500]
+
+            elif kind == "support_triage":
+                prov, model = _route_model("fast", body.provider)
+                sys_msg = _system_for(industry, "triage a Tier-1 support ticket") + (
+                    " Return ONLY JSON with: category, priority(p0-p3), sentiment, summary, suggested_response, escalate, escalate_to, tags."
+                )
+                chat = _llm(f"{run_id}-{i}", sys_msg, prov, model)
+                raw = []
+                async for ev in chat.stream_message(UserMessage(text=current_text)):
+                    if isinstance(ev, TextDelta): raw.append(ev.content)
+                    elif isinstance(ev, StreamDone): break
+                try:
+                    data = json.loads(_strip_json("".join(raw)))
+                except Exception:
+                    data = {"raw": "".join(raw), "parse_error": True}
+                step_out["output"] = data
+                current_text = json.dumps(data)[:1500]
+
+            elif kind == "qualify":
+                prov, model = _route_model("default", body.provider)
+                sys_msg = "You are JADE lead-qualification. Return ONLY JSON with score (0-100), tier ('hot'|'warm'|'cold'), rationale, next_action, recommended_agent."
+                chat = _llm(f"{run_id}-{i}", sys_msg, prov, model)
+                raw = []
+                async for ev in chat.stream_message(UserMessage(text=current_text)):
+                    if isinstance(ev, TextDelta): raw.append(ev.content)
+                    elif isinstance(ev, StreamDone): break
+                try: data = json.loads(_strip_json("".join(raw)))
+                except Exception: data = {"raw": "".join(raw), "parse_error": True}
+                step_out["output"] = data
+                current_text = json.dumps(data)[:1500]
+
+            else:
+                step_out["output"] = {"skipped": True, "reason": f"kind={kind} not implemented"}
+
+            step_out["status"] = "ok"
+        except Exception as e:
+            log.exception("playbook step failed")
+            step_out["status"] = "error"
+            step_out["error"] = str(e)
+        outputs.append(step_out)
+
+    elapsed_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
+    record = {
+        "id": run_id,
+        "playbook_slug": pb["slug"],
+        "industry": industry,
+        "input_preview": body.input[:300],
+        "steps": outputs,
+        "elapsed_ms": elapsed_ms,
+        "created_at": _utcnow_iso(),
+    }
+    await db.playbook_runs.insert_one(record)
+    return {"run_id": run_id, "playbook": pb["slug"], "elapsed_ms": elapsed_ms, "steps": outputs}
+
+
+@api.get("/playbook-runs")
+async def playbook_runs_list(_: str = Depends(require_admin)):
+    docs = await db.playbook_runs.find({}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
+    return docs
+
+
+# ---------- Moat Analytics ----------
+@api.get("/moat/stats")
+async def moat_stats():
+    """Public-ish moat metrics — shown on landing as social proof of accumulating IP."""
+    return {
+        "schemas": await db.schemas.count_documents({}),
+        "prompts": await db.prompts.count_documents({}),
+        "playbooks": await db.playbooks.count_documents({}),
+        "playbook_runs": await db.playbook_runs.count_documents({}),
+        "schema_corrections": await db.schema_corrections.count_documents({}),
+        "agent_runs": await db.agent_runs.count_documents({}),
+    }
+
+
+@api.get("/moat/admin")
+async def moat_admin(_: str = Depends(require_admin)):
+    """Detailed moat dashboard for admin."""
+    schemas = await db.schemas.find({}, {"_id": 0}).to_list(50)
+    prompts = await db.prompts.find({}, {"_id": 0}).to_list(50)
+    playbooks = await db.playbooks.find({}, {"_id": 0}).to_list(50)
+    corrections = await db.schema_corrections.count_documents({})
+    runs_by_type_cursor = db.agent_runs.aggregate([{"$group": {"_id": "$agent_type", "n": {"$sum": 1}}}])
+    by_type = {d["_id"]: d["n"] async for d in runs_by_type_cursor}
+    return {
+        "schemas": schemas,
+        "prompts": prompts,
+        "playbooks": playbooks,
+        "schema_corrections": corrections,
+        "agent_runs_by_type": by_type,
+        "model_routing": {k: [f"{p}/{m}" for p, m in v] for k, v in MODEL_ROUTING.items()},
+    }
+
+
+# ---------- end MOAT ----------
+
+
 # -------------------- Routes: health --------------------
 @api.get("/")
 async def root():
@@ -295,6 +912,100 @@ async def update_lead_status(lead_id: str, status_value: str, _: str = Depends(r
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
     return {"ok": True}
+
+
+# -------------------- Routes: Lighthouse Customer Program --------------------
+LIGHTHOUSE_QUALIFY_SYS = (
+    "You are JADE's lighthouse-customer screener. Score this applicant 0-100 for fit as a JADE OS design partner / case study. "
+    "Higher score = better fit. Weight these factors heavily: (a) decision_authority='decision_maker', "
+    "(b) case_study_consent=true with logo+quote+metrics consent, (c) timeline <= 30 days, "
+    "(d) budget_band >= 1500_4500, (e) primary_pain matches one of our 6 agents cleanly. "
+    "Return ONLY JSON with: score (0-100), tier ('hot'|'warm'|'cold'), rationale (<=60 words), "
+    "next_action (1 sentence — e.g. 'Book 20-min discovery this week'), "
+    "red_flags (array of strings), green_flags (array of strings)."
+)
+
+
+async def _score_lighthouse(app_dict: dict) -> dict:
+    """Use JADE itself to score the lighthouse application. Dogfood."""
+    session = str(uuid.uuid4())
+    chat = _llm(session, LIGHTHOUSE_QUALIFY_SYS, "anthropic")
+    prompt = (
+        f"Industry: {app_dict.get('industry')}\n"
+        f"Company: {app_dict.get('company')} ({app_dict.get('company_size')} employees)\n"
+        f"Operator: {app_dict.get('name')} · {app_dict.get('title')}\n"
+        f"Authority: {app_dict.get('decision_authority')}\n"
+        f"Timeline: {app_dict.get('timeline')}\n"
+        f"Budget: {app_dict.get('budget_band')}\n"
+        f"Primary pain: {app_dict.get('primary_pain')}\n"
+        f"Pain detail: {app_dict.get('pain_detail')}\n"
+        f"Target outcome: {app_dict.get('target_outcome')}\n"
+        f"Case-study consent: {app_dict.get('case_study_consent')}\n"
+        f"Logo consent: {app_dict.get('logo_consent')}\n"
+        f"Quote consent: {app_dict.get('quote_consent')}\n"
+        f"Metrics consent: {app_dict.get('metrics_consent')}\n"
+        "Score now."
+    )
+    try:
+        raw = []
+        async for ev in chat.stream_message(UserMessage(text=prompt)):
+            if isinstance(ev, TextDelta): raw.append(ev.content)
+            elif isinstance(ev, StreamDone): break
+        try:
+            return json.loads(_strip_json("".join(raw)))
+        except Exception:
+            return {"score": None, "tier": None, "rationale": "auto-score parse error", "next_action": "Manual review", "red_flags": [], "green_flags": []}
+    except Exception:
+        return {"score": None, "tier": None, "rationale": "auto-score llm error", "next_action": "Manual review", "red_flags": [], "green_flags": []}
+
+
+@api.post("/lighthouse/apply", response_model=LighthouseApplication)
+async def lighthouse_apply(body: LighthouseCreate):
+    """Public endpoint. Captures application and auto-scores it via JADE."""
+    app = LighthouseApplication(**body.model_dump())
+    # Auto-score with JADE
+    qual = await _score_lighthouse(app.model_dump())
+    app.score = qual.get("score")
+    app.tier = qual.get("tier")
+    app.rationale = qual.get("rationale")
+    app.next_action = qual.get("next_action")
+    app.green_flags = qual.get("green_flags") or []
+    app.red_flags = qual.get("red_flags") or []
+    # Hot applicants auto-advance to screening; cold get queued
+    if app.tier == "hot":
+        app.status = "screening"
+    await db.lighthouse_applications.insert_one(app.model_dump())
+    await _log_run("qualify_lead", "anthropic", DEFAULT_MODELS["anthropic"], f"[lighthouse] {app.company} · {app.industry}", json.dumps(qual)[:500])
+    return app
+
+
+@api.get("/lighthouse/applications", response_model=List[LighthouseApplication])
+async def lighthouse_list(_: str = Depends(require_admin)):
+    docs = await db.lighthouse_applications.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return [LighthouseApplication(**d) for d in docs]
+
+
+@api.patch("/lighthouse/applications/{app_id}")
+async def lighthouse_update(app_id: str, status_value: Optional[str] = None, notes: Optional[str] = None, _: str = Depends(require_admin)):
+    update: Dict[str, Any] = {}
+    if status_value: update["status"] = status_value
+    if notes is not None: update["notes"] = notes
+    if not update:
+        raise HTTPException(400, "No update fields")
+    res = await db.lighthouse_applications.update_one({"id": app_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+@api.get("/lighthouse/stats")
+async def lighthouse_stats():
+    """Public-ish counter for the landing page."""
+    total = await db.lighthouse_applications.count_documents({})
+    selected = await db.lighthouse_applications.count_documents({"status": {"$in": ["selected", "pilot_live", "case_published"]}})
+    cap = 5  # MAX 5 lighthouse slots
+    slots_remaining = max(0, cap - selected)
+    return {"total_applications": total, "slots_total": cap, "slots_remaining": slots_remaining, "selected_or_active": selected}
 
 
 # -------------------- Routes: agent demo --------------------
@@ -977,6 +1688,27 @@ async def seed_admin():
         await db.case_studies.update_one(
             {"slug": cs["slug"]},
             {"$setOnInsert": {**cs, "id": str(uuid.uuid4()), "created_at": _utcnow_iso()}},
+            upsert=True,
+        )
+    # Seed schemas (MOAT)
+    for s in SCHEMA_SEED:
+        await db.schemas.update_one(
+            {"slug": s["slug"], "org_email": None, "version": 1},
+            {"$setOnInsert": {**s, "id": str(uuid.uuid4()), "version": 1, "org_email": None, "correction_count": 0, "created_at": _utcnow_iso()}},
+            upsert=True,
+        )
+    # Seed prompts (MOAT)
+    for p in PROMPT_SEED:
+        await db.prompts.update_one(
+            {"slug": p["slug"]},
+            {"$setOnInsert": {**p, "id": str(uuid.uuid4()), "variant": "A", "version": 1, "org_email": None, "created_at": _utcnow_iso()}},
+            upsert=True,
+        )
+    # Seed playbooks (MOAT — the killer feature)
+    for pb in PLAYBOOK_SEED:
+        await db.playbooks.update_one(
+            {"slug": pb["slug"]},
+            {"$setOnInsert": {**pb, "id": str(uuid.uuid4()), "created_at": _utcnow_iso()}},
             upsert=True,
         )
 

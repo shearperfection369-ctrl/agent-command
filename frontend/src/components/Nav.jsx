@@ -5,9 +5,9 @@ const links = [
   { to: "/", label: "Home" },
   { to: "/reel", label: "Demo Reel" },
   { to: "/demo", label: "Console" },
+  { to: "/lighthouse", label: "Lighthouse" },
   { to: "/deck", label: "Pitch Deck" },
   { to: "/cases", label: "Cases" },
-  { to: "/plan", label: "Plan" },
   { to: "/billing", label: "Pricing" },
 ];
 

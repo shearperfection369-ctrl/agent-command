@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [usage, setUsage] = useState(null);
   const [hooks, setHooks] = useState([]);
   const [kb, setKb] = useState([]);
+  const [lighthouse, setLighthouse] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("leads");
 
@@ -26,7 +27,7 @@ export default function Dashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [s, l, r, o, u, h, k] = await Promise.all([
+      const [s, l, r, o, u, h, k, lh] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/leads"),
         api.get("/admin/agent-runs"),
@@ -34,9 +35,10 @@ export default function Dashboard() {
         api.get("/orgs/usage"),
         api.get("/webhooks"),
         api.get("/kb/docs"),
+        api.get("/lighthouse/applications"),
       ]);
       setStats(s.data); setLeads(l.data); setRuns(r.data); setOrgs(o.data);
-      setUsage(u.data); setHooks(h.data); setKb(k.data);
+      setUsage(u.data); setHooks(h.data); setKb(k.data); setLighthouse(lh.data);
     } catch (e) {
       if (e?.response?.status === 401) nav("/login");
       else toast.error("Failed to load.");
@@ -51,6 +53,7 @@ export default function Dashboard() {
   if (loading) return <div className="min-h-screen bg-console grid place-items-center font-mono-tech text-[#ccff00]">// loading console…</div>;
 
   const TABS = [
+    { id: "lighthouse", label: "LIGHTHOUSE", c: "#ff3b8a", n: lighthouse.length },
     { id: "leads", label: "LEADS", c: "#ccff00", n: leads.length },
     { id: "runs", label: "AGENT RUNS", c: "#00ffff", n: runs.length },
     { id: "orgs", label: "ORGS", c: "#7c5cff", n: orgs.length },
@@ -99,6 +102,7 @@ export default function Dashboard() {
 
       <section className="px-6 lg:px-10 py-10">
         <div className="max-w-[1400px] mx-auto">
+          {tab === "lighthouse" && <LighthousePanel apps={lighthouse} reload={load} />}
           {tab === "leads" && <LeadsTable leads={leads} updateLead={updateLead} />}
           {tab === "runs" && <RunsTable runs={runs} />}
           {tab === "orgs" && <OrgsTable orgs={orgs} />}
@@ -314,6 +318,108 @@ function KbPanel({ kb, reload }) {
               <button data-testid={`kb-del-${d.id}`} onClick={() => del(d.id)} className="btn-ghost text-xs px-3 text-[#ff3b8a]"><TrashSimple size={12} weight="bold" /></button>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+const LIGHTHOUSE_STATUSES = ["new", "screening", "interview_scheduled", "selected", "pilot_live", "case_published", "passed"];
+
+function LighthousePanel({ apps, reload }) {
+  const [expanded, setExpanded] = useState(null);
+
+  const updateStatus = async (id, status_value) => {
+    try { await api.patch(`/lighthouse/applications/${id}`, null, { params: { status_value } }); toast.success(`→ ${status_value}`); reload(); }
+    catch { toast.error("Update failed."); }
+  };
+
+  const tierColor = (t) => t === "hot" ? "#ff3b8a" : t === "warm" ? "#ccff00" : t === "cold" ? "#7c5cff" : "#666";
+
+  // Sort hottest first
+  const sorted = [...apps].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+  return (
+    <div className="space-y-4">
+      <div className="deck-card p-5 relative" data-testid="lighthouse-stats">
+        <CornerBrackets />
+        <div className="grid sm:grid-cols-4 gap-4">
+          <Stat k="TOTAL APPLICATIONS" v={apps.length} c="#ccff00" />
+          <Stat k="HOT" v={apps.filter((a) => a.tier === "hot").length} c="#ff3b8a" />
+          <Stat k="WARM" v={apps.filter((a) => a.tier === "warm").length} c="#ccff00" />
+          <Stat k="SELECTED · LIVE" v={apps.filter((a) => ["selected","pilot_live","case_published"].includes(a.status)).length} c="#7c5cff" />
+        </div>
+      </div>
+
+      <div className="deck-card relative" data-testid="lighthouse-table">
+        <CornerBrackets />
+        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+          <div className="mono-label text-[#ff3b8a]">LIGHTHOUSE APPLICATIONS · SORTED BY JADE SCORE</div>
+          <span className="mono-label text-white/40">{apps.length} TOTAL</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-white/5">{["SCORE","TIER","COMPANY · OPERATOR","INDUSTRY","PAIN","STATUS","ACTIONS"].map((h) => <th key={h} className="p-4 text-left mono-label text-white/40">{h}</th>)}</tr></thead>
+            <tbody>
+              {sorted.length === 0 && <tr><td colSpan={7} className="p-8 text-center font-mono-tech text-xs text-white/40">// no applications yet — share /lighthouse</td></tr>}
+              {sorted.map((a) => (
+                <>
+                <tr key={a.id} data-testid={`lh-row-${a.id}`} className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer" onClick={() => setExpanded(expanded === a.id ? null : a.id)}>
+                  <td className="p-4 font-display font-black text-3xl" style={{ color: tierColor(a.tier) }}>{a.score ?? "—"}</td>
+                  <td className="p-4 mono-label uppercase" style={{ color: tierColor(a.tier) }}>{a.tier || "—"}</td>
+                  <td className="p-4">
+                    <div className="text-white font-display font-bold">{a.company}</div>
+                    <div className="font-mono-tech text-[11px] text-white/55 mt-1">{a.name} · {a.title}</div>
+                    <div className="font-mono-tech text-[11px] text-white/45">{a.email}</div>
+                  </td>
+                  <td className="p-4 mono-label text-[#00ffff]">{a.industry.toUpperCase()}</td>
+                  <td className="p-4 text-white/65 text-xs max-w-[200px] truncate" title={a.primary_pain}>{a.primary_pain?.replace(/_/g," ")}</td>
+                  <td className="p-4"><span className="mono-label" style={{ color: a.status === "selected" || a.status === "pilot_live" ? "#ccff00" : a.status === "passed" ? "#7c5cff" : "#fff" }}>{a.status?.toUpperCase()}</span></td>
+                  <td className="p-4">
+                    <select data-testid={`lh-status-${a.id}`} value={a.status} onClick={(e) => e.stopPropagation()} onChange={(e) => updateStatus(a.id, e.target.value)} className="input-tech text-xs py-1.5 w-[160px]">
+                      {LIGHTHOUSE_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g," ").toUpperCase()}</option>)}
+                    </select>
+                  </td>
+                </tr>
+                {expanded === a.id && (
+                  <tr className="border-b border-white/5 bg-[#06081a]">
+                    <td colSpan={7} className="p-6">
+                      <div className="grid lg:grid-cols-3 gap-6">
+                        <div>
+                          <div className="mono-label text-[#00ffff] mb-2">RATIONALE · JADE'S READ</div>
+                          <p className="text-sm text-white/80 leading-relaxed">{a.rationale || "—"}</p>
+                          <div className="mono-label text-[#ccff00] mt-5 mb-2">NEXT ACTION</div>
+                          <p className="text-sm text-white/80 leading-relaxed">{a.next_action || "—"}</p>
+                        </div>
+                        <div>
+                          <div className="mono-label text-[#ccff00] mb-2">GREEN FLAGS</div>
+                          <ul className="space-y-1.5">{(a.green_flags || []).map((f, i) => <li key={i} className="font-mono-tech text-xs text-white/70 flex gap-2"><span className="text-[#ccff00]">▸</span>{f}</li>)}</ul>
+                          <div className="mono-label text-[#ff3b8a] mt-5 mb-2">RED FLAGS</div>
+                          <ul className="space-y-1.5">{(a.red_flags || []).map((f, i) => <li key={i} className="font-mono-tech text-xs text-white/70 flex gap-2"><span className="text-[#ff3b8a]">▸</span>{f}</li>)}</ul>
+                        </div>
+                        <div>
+                          <div className="mono-label text-white/45 mb-2">PAIN DETAIL</div>
+                          <p className="text-xs text-white/75 leading-relaxed">{a.pain_detail}</p>
+                          <div className="mono-label text-white/45 mt-4 mb-2">TARGET OUTCOME</div>
+                          <p className="text-xs text-white/75 leading-relaxed accent-cyan">{a.target_outcome}</p>
+                          <div className="mt-5 grid grid-cols-3 gap-2 text-[10px] font-mono-tech text-white/60">
+                            <div><span className="text-white/40">SIZE:</span> {a.company_size}</div>
+                            <div><span className="text-white/40">TIMELINE:</span> {a.timeline}</div>
+                            <div><span className="text-white/40">BUDGET:</span> {a.budget_band}</div>
+                            <div><span className="text-white/40">AUTH:</span> {a.decision_authority}</div>
+                            <div><span className="text-white/40">CASE OK:</span> {a.case_study_consent ? "✓" : "✗"}</div>
+                            <div><span className="text-white/40">LOGO OK:</span> {a.logo_consent ? "✓" : "✗"}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

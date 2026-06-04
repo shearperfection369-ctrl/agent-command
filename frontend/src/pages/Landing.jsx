@@ -140,6 +140,34 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ============== LIGHTHOUSE BAND ============== */}
+      <section className="relative border-t border-b border-white/5">
+        <div className="absolute inset-0 grid-bg-tight pointer-events-none" />
+        <div className="relative max-w-[1400px] mx-auto px-6 lg:px-10 py-12 lg:py-16">
+          <div className="grid lg:grid-cols-3 gap-10 items-center">
+            <div className="lg:col-span-2">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="dot" />
+                <span className="mono-label text-[#ff3b8a]">LIGHTHOUSE PROGRAM · APPLICATIONS OPEN</span>
+              </div>
+              <h2 className="font-display font-bold text-white text-3xl sm:text-5xl tracking-tight leading-tight">
+                Five lighthouse seats.<br />
+                <span className="accent-cyan">50% off year one for life.</span>
+              </h2>
+              <p className="mt-4 text-white/65 max-w-2xl leading-relaxed">
+                We're picking 5 companies to be the first published JADE OS field reports. White-glove implementation, named forward engineer, locked-in lighthouse pricing — in exchange for permission to publish what we built for you.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <Link to="/lighthouse" data-testid="lighthouse-band-cta" className="btn-jade inline-flex items-center justify-center gap-2">
+                APPLY FOR A LIGHTHOUSE SEAT <ArrowRight size={16} weight="bold" />
+              </Link>
+              <Link to="/cases" className="btn-ghost text-center text-xs">SEE EXISTING FIELD REPORTS</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ============== AGENT BENTO ============== */}
       <section className="relative bg-console-2 py-24 lg:py-32 px-6 lg:px-10">
         <div className="max-w-[1400px] mx-auto">

@@ -15,6 +15,7 @@ import { CaseStudiesIndex, CaseStudyDetail } from "@/pages/CaseStudies";
 import Billing from "@/pages/Billing";
 import BillingSuccess from "@/pages/BillingSuccess";
 import Portal from "@/pages/Portal";
+import Lighthouse from "@/pages/Lighthouse";
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
           <Route path="/billing" element={<Billing />} />
           <Route path="/billing/success" element={<BillingSuccess />} />
           <Route path="/portal" element={<Portal />} />
+          <Route path="/lighthouse" element={<Lighthouse />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<Dashboard />} />
         </Routes>
