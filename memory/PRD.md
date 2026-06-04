@@ -16,11 +16,17 @@ After 1st pivot: app must be **universal** — not freight-only. Agents must ser
 - Admin (JADE founder) — reviews leads, watches agent run tape.
 
 ## What's implemented (2026-02)
-- **Public**: Landing (universal hero + 6-agent bento + 8-vertical grid + 4-phase deployment + 3-tier pricing + lead capture). Demo Reel (5 scenes, autoplay, live LLM streaming). Console / Agent Demo (5 agent tabs × 11 industries × 2 providers + PDF upload). Pitch Deck (13-slide interactive deck + PDF download). Business Plan + Launch Kit (rendered + PDF). Case Studies (3 seeded, public, slug-routed). Customer Portal preview (read-only by email). Billing/Stripe Checkout (3 tiers, success page polls until paid).
-- **Admin**: JWT login → Mission Control dashboard with 5 tabs (Leads · Agent Runs · Orgs · Webhooks · Knowledge Base). Stats cards (leads, runs, paid orgs, est. tokens). Webhook register/test/delete (Slack + CRM + generic). KB doc CRUD powering /api/kb/ask RAG. Org registry + usage analytics.
-- **Backend**: 30 (iter-1) + 26 (iter-2) = **56 tests passing**. New endpoints: `/api/agent/extract-pdf` (pypdf), `/api/kb/docs`, `/api/kb/ask` (RAG-lite), `/api/webhooks*` + `/api/webhooks/{id}/dispatch` (httpx delivery + log), `/api/billing/checkout` + `/api/billing/status/{sid}` + `/api/webhook/stripe`, `/api/orgs` + `/api/orgs/usage`, `/api/case-studies` (+ slug), `/api/portal/preview`. Three case studies auto-seeded on startup.
+- **THE MOAT (Round 4)** — customer-locking IP layers that turn JADE from "thin LLM wrapper" into a defensible product:
+    - **Schema Library** — 4 seeded versioned extraction schemas (freight_bol, healthcare_intake, saas_order_form, manufacturing_po). Customer corrections increment `correction_count` → our schemas improve from THEIR data.
+    - **Prompt Library** — 3 seeded named/versioned prompts with A/B variants. `/api/prompts/run` interpolates `{{vars}}` and routes through `_route_model`.
+    - **Playbooks** — multi-step workflows orchestrated as code (not Zapier-able). 3 seeded: freight_load_intake (extract→outreach), healthcare_intake_triage (extract→triage), saas_inbound_lead (qualify→outreach). Verified end-to-end run: 12.8s, 2 steps, both green.
+    - **Model Router** — `MODEL_ROUTING` dict with 3 profiles (fast/default/smart). Customer code never changes when prices shift.
+    - **Moat Analytics** — `/api/moat/stats` (public) + `/api/moat/admin` (auth) surface the accumulating IP.
+- **LIGHTHOUSE CUSTOMER PROGRAM (Round 4)** — `/lighthouse` dedicated landing with multi-section application form. Applications auto-scored by JADE's own lead-qualification agent (dogfooding). Hot applicants auto-advance to 'screening' status. 5-seat cap with public counter. Admin dashboard has a new Lighthouse tab sorted by JADE score, expandable rows with rationale + flags + status workflow (new → screening → interview_scheduled → selected → pilot_live → case_published).
+- **Public**: + Lighthouse band on landing page driving CTR to /lighthouse.
+- **Backend**: **86/86 tests passing** across 3 iterations.
 - Admin credentials in `/app/memory/test_credentials.md`.
 
 ## Backlog
-- **P2**: Voice agent (Twilio + Whisper). Stripe customer portal link for self-serve subscription mgmt. SSO for the customer portal. Per-customer LLM token budgets with hard caps.
-- **P3**: Vector-DB upgrade for the KB (currently keyword/full-text). Webhook delivery retry queue. ICP-templated case-study generation. Embed-anywhere widget for the Demo Reel.
+- **P2**: Twilio voice/SMS agent · Stripe-hosted customer portal · per-customer hard token caps.
+- **P3**: Vector DB upgrade for KB · embed-anywhere reel widget · multi-user org roles · public playbook builder.
