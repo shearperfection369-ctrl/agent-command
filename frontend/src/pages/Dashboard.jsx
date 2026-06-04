@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { isAuthed } from "../lib/auth";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus } from "@/lib/icons";
+import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus, Lightning } from "@/lib/icons";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -59,6 +59,7 @@ export default function Dashboard() {
     { id: "orgs", label: "ORGS", c: "#7c5cff", n: orgs.length },
     { id: "hooks", label: "WEBHOOKS", c: "#ff3b8a", n: hooks.length },
     { id: "kb", label: "KNOWLEDGE BASE", c: "#ccff00", n: kb.length },
+    { id: "selftest", label: "SELF-TEST", c: "#00ffff", n: "" },
   ];
 
   return (
@@ -108,6 +109,7 @@ export default function Dashboard() {
           {tab === "orgs" && <OrgsTable orgs={orgs} />}
           {tab === "hooks" && <WebhooksPanel hooks={hooks} reload={load} />}
           {tab === "kb" && <KbPanel kb={kb} reload={load} />}
+          {tab === "selftest" && <SelfTestPanel />}
         </div>
       </section>
     </div>
@@ -425,3 +427,218 @@ function LighthousePanel({ apps, reload }) {
     </div>
   );
 }
+
+
+// ============================================================
+// SELF-TEST PANEL — runs the /api/admin/self-test battery and
+// renders per-check status, latency, and details for every major feature.
+// ============================================================
+function SelfTestPanel() {
+  const [running, setRunning] = useState(false);
+  const [deep, setDeep] = useState(false);
+  const [report, setReport] = useState(null);
+  const [openRow, setOpenRow] = useState(null);
+
+  const run = async () => {
+    setRunning(true);
+    setReport(null);
+    setOpenRow(null);
+    const startedAt = Date.now();
+    try {
+      const { data } = await api.get(`/admin/self-test`, { params: { deep }, timeout: 120000 });
+      setReport(data);
+      const { pass, fail, skip } = data.summary;
+      if (fail === 0) toast.success(`Self-test: ${pass} pass · ${skip} skip · 0 fail`);
+      else toast.error(`Self-test: ${fail} FAIL · ${pass} pass · ${skip} skip`);
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e?.message || "Self-test failed to run";
+      toast.error(msg);
+      setReport({
+        results: [],
+        summary: { pass: 0, fail: 1, skip: 0, total: 1, total_ms: Date.now() - startedAt, deep, ran_at: new Date().toISOString() },
+        error: msg,
+      });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const statusColor = (s) => ({ pass: "#ccff00", fail: "#ff3b8a", skip: "#7c5cff", warn: "#00ffff" }[s] || "#fff");
+  const statusGlyph = (s) => ({ pass: "✓", fail: "✗", skip: "⊘", warn: "!" }[s] || "?");
+
+  const groups = report?.results
+    ? report.results.reduce((acc, r) => {
+        (acc[r.category] = acc[r.category] || []).push(r);
+        return acc;
+      }, {})
+    : {};
+
+  return (
+    <div className="space-y-6" data-testid="selftest-panel">
+      {/* Controls */}
+      <div className="deck-card p-6 relative" data-testid="selftest-controls">
+        <CornerBrackets />
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <div className="mono-label text-[#00ffff] mb-2">SYSTEM SELF-TEST · END-TO-END HEALTH CHECK</div>
+            <p className="text-sm text-white/65 max-w-2xl leading-relaxed">
+              Runs a battery of checks across every major feature — auth, leads, lighthouse, the MOAT
+              (schemas/prompts/playbooks), knowledge base, webhooks, billing, Twilio, LLM connectivity,
+              PDF extraction, and Mongo health. Each check reports status, latency, and details.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none" data-testid="selftest-deep-toggle">
+              <input
+                type="checkbox"
+                checked={deep}
+                onChange={(e) => setDeep(e.target.checked)}
+                className="accent-[#ccff00] w-4 h-4"
+                data-testid="selftest-deep-checkbox"
+              />
+              <span className="mono-label text-white/70">
+                DEEP <span className="text-white/40">(invokes LLM · costs tokens)</span>
+              </span>
+            </label>
+            <button
+              data-testid="selftest-run-btn"
+              onClick={run}
+              disabled={running}
+              className="btn-jade inline-flex items-center gap-2 px-5"
+            >
+              <Lightning size={14} weight="bold" />
+              {running ? "RUNNING…" : "RUN TESTS"}
+            </button>
+          </div>
+        </div>
+
+        {/* Summary strip */}
+        {report?.summary && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6" data-testid="selftest-summary">
+            <SummaryStat k="TOTAL" v={report.summary.total} c="#fff" />
+            <SummaryStat k="PASS" v={report.summary.pass} c="#ccff00" />
+            <SummaryStat k="FAIL" v={report.summary.fail} c="#ff3b8a" />
+            <SummaryStat k="SKIP" v={report.summary.skip} c="#7c5cff" />
+            <SummaryStat k="ELAPSED" v={`${(report.summary.total_ms / 1000).toFixed(2)}s`} c="#00ffff" />
+          </div>
+        )}
+      </div>
+
+      {/* Empty state */}
+      {!report && !running && (
+        <div className="deck-card p-12 relative text-center" data-testid="selftest-empty">
+          <CornerBrackets />
+          <Lightning size={36} weight="bold" className="mx-auto text-[#00ffff] mb-4" />
+          <div className="font-display font-black text-white text-2xl tracking-tight">No report yet.</div>
+          <div className="font-mono-tech text-xs text-white/50 mt-2">
+            // hit RUN TESTS — full sweep typically completes in &lt; 100ms (skip-LLM) or ~4s (deep)
+          </div>
+        </div>
+      )}
+
+      {/* Running state */}
+      {running && (
+        <div className="deck-card p-12 relative text-center" data-testid="selftest-running">
+          <CornerBrackets />
+          <div className="font-mono-tech text-sm text-[#ccff00] animate-pulse">
+            // JADE OS · running diagnostics{deep ? " · LLM round-trips engaged" : ""}…
+          </div>
+        </div>
+      )}
+
+      {/* Results grouped by category */}
+      {report?.results && report.results.length > 0 && (
+        <div className="space-y-4">
+          {Object.entries(groups).map(([cat, rows]) => {
+            const fails = rows.filter((r) => r.status === "fail").length;
+            const passes = rows.filter((r) => r.status === "pass").length;
+            const skips = rows.filter((r) => r.status === "skip").length;
+            return (
+              <div key={cat} className="deck-card relative" data-testid={`selftest-group-${cat}`}>
+                <CornerBrackets />
+                <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between flex-wrap gap-2">
+                  <div className="mono-label text-[#00ffff]">{cat}</div>
+                  <div className="font-mono-tech text-[11px] text-white/55 flex gap-3">
+                    <span className="text-[#ccff00]">PASS {passes}</span>
+                    {fails > 0 && <span className="text-[#ff3b8a]">FAIL {fails}</span>}
+                    {skips > 0 && <span className="text-[#7c5cff]">SKIP {skips}</span>}
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {rows.map((r, idx) => {
+                      const key = `${cat}-${idx}`;
+                      const open = openRow === key;
+                      const hasDetails = r.details || r.message !== "OK";
+                      return (
+                        <Fragment key={key}>
+                          <tr
+                            data-testid={`selftest-row-${cat}-${idx}`}
+                            className={`border-b border-white/5 hover:bg-white/[0.02] ${hasDetails ? "cursor-pointer" : ""}`}
+                            onClick={() => hasDetails && setOpenRow(open ? null : key)}
+                          >
+                            <td className="p-4 w-[60px] text-center">
+                              <span
+                                className="font-mono-tech font-bold text-lg"
+                                style={{ color: statusColor(r.status) }}
+                                data-testid={`selftest-status-${cat}-${idx}`}
+                              >
+                                {statusGlyph(r.status)}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <div className="text-white font-display font-bold">{r.name}</div>
+                              {r.status !== "pass" && (
+                                <div
+                                  className="font-mono-tech text-[11px] mt-1"
+                                  style={{ color: statusColor(r.status) }}
+                                >
+                                  {r.message}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-4 w-[120px] font-mono-tech text-xs text-white/55 text-right">
+                              {r.latency_ms.toFixed(1)}ms
+                            </td>
+                            <td className="p-4 w-[100px] text-right">
+                              <span className="mono-label" style={{ color: statusColor(r.status) }}>
+                                {r.status.toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                          {open && hasDetails && (
+                            <tr className="border-b border-white/5 bg-[#06081a]">
+                              <td colSpan={4} className="p-5">
+                                <div className="mono-label text-white/40 mb-2">RAW</div>
+                                <pre className="font-mono-tech text-[11px] text-white/75 whitespace-pre-wrap break-all leading-relaxed">
+{JSON.stringify({ message: r.message, details: r.details }, null, 2)}
+                                </pre>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryStat({ k, v, c }) {
+  return (
+    <div
+      className="border border-white/10 px-4 py-3"
+      style={{ borderColor: `${c}33`, background: `${c}08` }}
+    >
+      <div className="mono-label text-[10px]" style={{ color: c }}>{k}</div>
+      <div className="font-display font-black text-2xl tracking-tighter mt-1" style={{ color: c }}>{v}</div>
+    </div>
+  );
+}
+

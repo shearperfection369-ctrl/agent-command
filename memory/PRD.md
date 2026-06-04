@@ -16,6 +16,7 @@ After 1st pivot: app must be **universal** — not freight-only. Agents must ser
 - Admin (JADE founder) — reviews leads, watches agent run tape.
 
 ## What's implemented (2026-02)
+- **ADMIN SELF-TEST (Round 5 · 2026-02-04)** — new `SELF-TEST` tab in admin/console runs a battery of 21 checks across every major feature (auth, leads, lighthouse, MOAT schemas/prompts/playbooks, KB, webhooks, billing/Stripe, Twilio SDK + config, LLM key, Claude chat round-trip, Claude extract+JSON, agent_runs ledger, case studies, pypdf, Mongo ping). Each check returns `{name, category, status, latency_ms, message, details}`. `?deep=true` toggles LLM round-trips (cost-gated). UI: per-category result groups with PASS/FAIL/SKIP counters, expandable rows showing raw JSON, summary cards. Backend endpoint: `GET /api/admin/self-test` (admin-gated). Regression: `backend/tests/test_self_test.py` (2/2 passing).
 - **THE MOAT (Round 4)** — customer-locking IP layers that turn JADE from "thin LLM wrapper" into a defensible product:
     - **Schema Library** — 4 seeded versioned extraction schemas (freight_bol, healthcare_intake, saas_order_form, manufacturing_po). Customer corrections increment `correction_count` → our schemas improve from THEIR data.
     - **Prompt Library** — 3 seeded named/versioned prompts with A/B variants. `/api/prompts/run` interpolates `{{vars}}` and routes through `_route_model`.

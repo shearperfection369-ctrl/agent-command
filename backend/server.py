@@ -2078,6 +2078,228 @@ async def embed_reel_config(industry: Optional[str] = None, scene: Optional[int]
     }
 
 
+# ============================================================
+# ADMIN · SELF-TEST · runs a battery of checks across every major feature
+# ============================================================
+async def _check(name: str, category: str, fn, *, skip_reason: Optional[str] = None) -> dict:
+    """Run a single check and return a structured result. fn is an async callable."""
+    if skip_reason:
+        return {"name": name, "category": category, "status": "skip",
+                "latency_ms": 0, "message": skip_reason, "details": None}
+    started = datetime.now(timezone.utc)
+    try:
+        details = await fn()
+        latency = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+        return {"name": name, "category": category, "status": "pass",
+                "latency_ms": round(latency, 1),
+                "message": "OK", "details": details}
+    except AssertionError as ae:
+        latency = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+        return {"name": name, "category": category, "status": "fail",
+                "latency_ms": round(latency, 1),
+                "message": str(ae) or "assertion failed", "details": None}
+    except Exception as e:
+        latency = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+        return {"name": name, "category": category, "status": "fail",
+                "latency_ms": round(latency, 1),
+                "message": f"{type(e).__name__}: {e}", "details": None}
+
+
+@api.get("/admin/self-test")
+async def admin_self_test(deep: bool = False, _: str = Depends(require_admin)):
+    """Run a battery of health checks across every major feature.
+
+    `deep=true` enables LLM-backed checks (extract/chat) which consume tokens.
+    Returns: { results: [...], summary: {pass, fail, skip, total, total_ms} }
+    """
+    results: List[dict] = []
+    overall_started = datetime.now(timezone.utc)
+
+    # --- AUTH ---
+    async def _admin_exists():
+        doc = await db.admins.find_one({"email": ADMIN_EMAIL})
+        assert doc, "admin record missing"
+        return {"email": ADMIN_EMAIL}
+    results.append(await _check("admin record present", "AUTH", _admin_exists))
+
+    # --- LEADS ---
+    async def _leads_list():
+        n = await db.leads.count_documents({})
+        return {"count": n}
+    results.append(await _check("leads collection reachable", "LEADS", _leads_list))
+
+    async def _lead_roundtrip():
+        probe_email = f"selftest+{uuid.uuid4().hex[:8]}@jadeos.ai"
+        lead = Lead(name="Self Test", email=probe_email, company="JADE QA",
+                    vertical="general", use_case="self-test probe")
+        await db.leads.insert_one(lead.model_dump())
+        found = await db.leads.find_one({"email": probe_email})
+        assert found, "lead insert failed"
+        await db.leads.delete_one({"email": probe_email})
+        return {"inserted_and_purged": probe_email}
+    results.append(await _check("lead insert+delete roundtrip", "LEADS", _lead_roundtrip))
+
+    # --- LIGHTHOUSE ---
+    async def _lh_stats():
+        n = await db.lighthouse_applications.count_documents({})
+        return {"applications": n}
+    results.append(await _check("lighthouse_applications reachable", "LIGHTHOUSE", _lh_stats))
+
+    # --- MOAT · schemas / prompts / playbooks ---
+    async def _schemas():
+        rows = await db.schemas.find({}, {"_id": 0}).to_list(100)
+        assert len(rows) >= 1, "no seeded schemas — startup may not have run"
+        return {"count": len(rows), "slugs": [r["slug"] for r in rows][:5]}
+    results.append(await _check("schemas seeded", "MOAT", _schemas))
+
+    async def _prompts():
+        rows = await db.prompts.find({}, {"_id": 0}).to_list(100)
+        assert len(rows) >= 1, "no seeded prompts"
+        return {"count": len(rows), "slugs": [r["slug"] for r in rows][:5]}
+    results.append(await _check("prompts seeded", "MOAT", _prompts))
+
+    async def _playbooks():
+        rows = await db.playbooks.find({}, {"_id": 0}).to_list(100)
+        assert len(rows) >= 1, "no seeded playbooks"
+        return {"count": len(rows), "slugs": [r["slug"] for r in rows][:5]}
+    results.append(await _check("playbooks seeded", "MOAT", _playbooks))
+
+    async def _moat_stats():
+        # Inline call rather than HTTP round-trip
+        s = await db.schemas.count_documents({})
+        p = await db.prompts.count_documents({})
+        b = await db.playbooks.count_documents({})
+        return {"schemas": s, "prompts": p, "playbooks": b}
+    results.append(await _check("moat stats computable", "MOAT", _moat_stats))
+
+    # --- KNOWLEDGE BASE ---
+    async def _kb():
+        n = await db.kb_docs.count_documents({})
+        return {"docs": n}
+    results.append(await _check("knowledge base reachable", "KB", _kb))
+
+    # --- WEBHOOKS ---
+    async def _hooks():
+        n = await db.webhooks.count_documents({})
+        return {"webhooks": n}
+    results.append(await _check("webhook registry reachable", "WEBHOOKS", _hooks))
+
+    # --- BILLING / STRIPE ---
+    async def _stripe_configured():
+        assert STRIPE_API_KEY, "STRIPE_API_KEY missing"
+        return {"has_key": True, "mode": "test" if STRIPE_API_KEY.startswith("sk_test_") else "live"}
+    results.append(await _check("Stripe key configured", "BILLING", _stripe_configured))
+
+    async def _orgs():
+        n = await db.orgs.count_documents({})
+        active = await db.orgs.count_documents({"subscription_status": "active"})
+        return {"total": n, "active": active}
+    results.append(await _check("orgs collection reachable", "BILLING", _orgs))
+
+    # --- TWILIO ---
+    async def _twilio_cfg():
+        cfg = _twilio_configured()
+        assert cfg, "TWILIO env vars missing or twilio SDK not installed"
+        return {"phone": TWILIO_PHONE_NUMBER,
+                "sid_prefix": TWILIO_ACCOUNT_SID[:6] + "…" if TWILIO_ACCOUNT_SID else None}
+    results.append(await _check(
+        "Twilio configured", "TWILIO", _twilio_cfg,
+        skip_reason=None if _twilio_configured() else "Twilio creds not set in env (SMS/Voice webhooks unreachable until configured)",
+    ))
+
+    async def _twilio_sdk():
+        assert MessagingResponse is not None, "twilio.twiml.messaging_response not importable"
+        assert VoiceResponse is not None, "twilio.twiml.voice_response not importable"
+        # TwiML construction smoke test (does not hit network)
+        m = MessagingResponse()
+        m.message("ping")
+        v = VoiceResponse()
+        v.say("ping")
+        return {"twiml_smoke": "ok"}
+    results.append(await _check("Twilio TwiML SDK importable", "TWILIO", _twilio_sdk))
+
+    # --- LLM CONNECTIVITY ---
+    async def _llm_key():
+        assert EMERGENT_LLM_KEY, "EMERGENT_LLM_KEY missing"
+        return {"has_key": True, "providers": list(DEFAULT_MODELS.keys())}
+    results.append(await _check("Emergent LLM key present", "LLM", _llm_key))
+
+    # --- DEEP TESTS · use LLM tokens, only when requested ---
+    async def _llm_chat_deep():
+        session = str(uuid.uuid4())
+        chat = _llm(session, "You are a test bot. Respond with the single word PONG.", "anthropic")
+        chunks = []
+        async for ev in chat.stream_message(UserMessage(text="ping")):
+            if isinstance(ev, TextDelta):
+                chunks.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+        text = "".join(chunks).strip()
+        assert text, "empty LLM response"
+        return {"reply_preview": text[:120], "provider": "anthropic"}
+    results.append(await _check(
+        "Claude chat round-trip", "LLM", _llm_chat_deep,
+        skip_reason=None if deep else "deep=false (pass ?deep=true to enable LLM calls — costs tokens)",
+    ))
+
+    async def _llm_extract_deep():
+        session = str(uuid.uuid4())
+        sys_prompt = ("Extract JSON {company, freight} from input. Return ONLY JSON.")
+        chat = _llm(session, sys_prompt, "anthropic")
+        chunks = []
+        async for ev in chat.stream_message(UserMessage(text="ACME Corp shipped 12 pallets of dry freight from MSP to DFW.")):
+            if isinstance(ev, TextDelta):
+                chunks.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+        raw = _strip_json("".join(chunks))
+        data = json.loads(raw)
+        assert "company" in data, "extracted JSON missing 'company'"
+        return {"extracted": data}
+    results.append(await _check(
+        "Claude extract+JSON parse", "LLM", _llm_extract_deep,
+        skip_reason=None if deep else "deep=false",
+    ))
+
+    # --- AGENT RUNS · ledger ---
+    async def _agent_runs():
+        n = await db.agent_runs.count_documents({})
+        return {"runs_logged": n}
+    results.append(await _check("agent_runs ledger reachable", "AGENT", _agent_runs))
+
+    # --- CASE STUDIES ---
+    async def _case_studies():
+        rows = await db.case_studies.find({}, {"_id": 0, "slug": 1, "title": 1}).to_list(20)
+        assert len(rows) >= 1, "no seeded case studies"
+        return {"count": len(rows), "slugs": [r["slug"] for r in rows][:5]}
+    results.append(await _check("case studies seeded", "CONTENT", _case_studies))
+
+    # --- PDF EXTRACTION DEP ---
+    async def _pdf_dep():
+        assert PdfReader is not None, "pypdf not installed (pip install pypdf)"
+        return {"pypdf": "ok"}
+    results.append(await _check("PDF extractor (pypdf) importable", "AGENT", _pdf_dep))
+
+    # --- MONGO PING ---
+    async def _mongo_ping():
+        pong = await client.admin.command("ping")
+        assert pong.get("ok") == 1, "mongo ping failed"
+        return {"ping": "ok", "db": DB_NAME}
+    results.append(await _check("MongoDB ping", "INFRA", _mongo_ping))
+
+    # --- SUMMARY ---
+    summary = {
+        "pass": sum(1 for r in results if r["status"] == "pass"),
+        "fail": sum(1 for r in results if r["status"] == "fail"),
+        "skip": sum(1 for r in results if r["status"] == "skip"),
+        "total": len(results),
+        "total_ms": round((datetime.now(timezone.utc) - overall_started).total_seconds() * 1000, 1),
+        "deep": deep,
+        "ran_at": _utcnow_iso(),
+    }
+    return {"results": results, "summary": summary}
+
+
 # -------------------- Startup: seed admin --------------------
 @app.on_event("startup")
 async def seed_admin():
