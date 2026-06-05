@@ -6,12 +6,16 @@ import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { Check, ArrowRight } from "@/lib/icons";
 
 const TIERS = [
-  { id: "dispatch", name: "DISPATCH", price: "$1,500", per: "/MO", c: "#ccff00",
-    feats: ["1 agent · any vertical", "Up to 500 runs / mo", "Slack + email delivery", "Email support · 1 business day"] },
-  { id: "fleet", name: "FLEET", price: "$4,500", per: "/MO", c: "#00ffff", featured: true,
-    feats: ["3 agents · any verticals", "Up to 5,000 runs / mo", "Native CRM / TMS / EMR webhooks", "Dedicated Slack · same-day"] },
+  { id: "pilot", name: "PILOT", price: "$0", per: "/30D", c: "#ffce4f",
+    feats: ["Lighthouse design-partner slot", "1 agent · 1 vertical", "Up to 200 runs total", "Co-authored case study at close", "Limited slots · application-gated"] },
+  { id: "operator", name: "OPERATOR", price: "$3,000", per: "/MO", c: "#ccff00",
+    feats: ["1 agent · any vertical", "Up to 2,000 runs / mo", "Slack + email + webhook delivery", "Email support · 1 business day"] },
+  { id: "fleet", name: "FLEET", price: "$10,000", per: "/MO", c: "#00ffff", featured: true,
+    feats: ["3 agents · multi-vertical", "Up to 15,000 runs / mo", "Native CRM / TMS / EMR webhooks", "Dedicated Slack · same-day"] },
+  { id: "enterprise", name: "ENTERPRISE", price: "$25,000+", per: "/MO", c: "#ff3b8a",
+    feats: ["Unlimited agents · 11 verticals", "Custom playbooks · white-label", "SOC2 readiness · BAA on req.", "Quarterly ops review · named engineer"] },
   { id: "vault", name: "VAULT", price: "Custom", per: "ANNUAL", c: "#7c5cff",
-    feats: ["Unlimited agents + custom builds", "On-prem / VPC deployment", "SOC2 + BAA for healthcare", "Quarterly ops review · named engineer"] },
+    feats: ["On-prem / VPC deployment", "SOC2 + HIPAA full stack", "24/7 same-hour SLA", "Co-founder access · quarterly roadmap input"] },
 ];
 
 export default function Billing() {
@@ -20,8 +24,12 @@ export default function Billing() {
   const [loadingTier, setLoadingTier] = useState(null);
 
   const checkout = async (tier) => {
-    if (tier === "vault") {
+    if (tier === "vault" || tier === "enterprise") {
       window.location.href = "/#book";
+      return;
+    }
+    if (tier === "pilot") {
+      window.location.href = "/lighthouse";
       return;
     }
     if (!email || !company) {

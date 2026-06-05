@@ -16,6 +16,7 @@ import Billing from "@/pages/Billing";
 import BillingSuccess from "@/pages/BillingSuccess";
 import Portal from "@/pages/Portal";
 import Lighthouse from "@/pages/Lighthouse";
+import Logistics from "@/pages/Logistics";
 import PlaybookBuilder from "@/pages/PlaybookBuilder";
 import EmbedReel from "@/pages/EmbedReel";
 import PressKit from "@/pages/PressKit";
@@ -68,6 +69,7 @@ function App() {
             <Route path="/billing/success" element={<BillingSuccess />} />
             <Route path="/portal" element={<Portal />} />
             <Route path="/lighthouse" element={<Lighthouse />} />
+            <Route path="/logistics" element={<Logistics />} />
             <Route path="/playbooks/new" element={<PlaybookBuilder />} />
             <Route path="/embed/reel" element={<EmbedReel />} />
             <Route path="/press" element={<PressKit />} />
