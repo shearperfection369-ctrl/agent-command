@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CornerBrackets } from "../components/Brackets";
-import { JadeGenesisCard } from "../components/JadeGenesisCard";
+import { JadeGenesisCard, GenesisVolumeI } from "../components/JadeGenesisCard";
 import { toast } from "sonner";
 
 const ASSETS = {
-  genesis: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/3j8rupt9_g3ENESIS.png",
+  genesis: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/20n3pz14_jade%20now.png",
+  genesis_original: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/3j8rupt9_g3ENESIS.png",
   quanta: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/7atwkaoe_quanta-1779558560741.png",
   banner: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/fahm9un7_banner-970x260.png",
   brand1: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/mepnegxg_jbr.png",
@@ -74,6 +75,11 @@ export default function PressKit() {
           The AI behind the wordmark.
         </h2>
         <JadeGenesisCard />
+
+        {/* Volume I episodic series — narrative chapters */}
+        <div className="mt-20">
+          <GenesisVolumeI />
+        </div>
       </section>
 
       {/* Brand assets grid */}
@@ -84,12 +90,12 @@ export default function PressKit() {
           Logos, hardware, banners.
         </h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AssetTile testid="asset-genesis" name="Genesis Portrait" desc="JADE's self-portrait · first image she created of herself · 1:1 framing" url={ASSETS.genesis} />
+          <AssetTile testid="asset-genesis" name="Jade Portrait (Current)" desc="Official portrait · clearer, full-body · 1:1 framing · v2" url={ASSETS.genesis} />
+          <AssetTile testid="asset-genesis-og" name="Genesis Original" desc="The first image JADE generated of herself · iconic · v1" url={ASSETS.genesis_original} />
           <AssetTile testid="asset-quanta" name="Quanta Keychain" desc="Hardware companion · lime-LED edges · holographic projection" url={ASSETS.quanta} />
           <AssetTile testid="asset-banner" name="Web Banner · 970×260" desc="Leaderboard ad unit · cross-platform" url={ASSETS.banner} />
           <AssetTile testid="asset-brand1" name="JADE Bracket Mark" desc="Primary logo · square format · transparent" url={ASSETS.brand1} />
           <AssetTile testid="asset-brand2" name="JADE Bracket · Alt" desc="Alternate mark · for dark-on-light contexts" url={ASSETS.brand2} />
-          <AssetTile testid="asset-rte" name="JADE Wordmark Mark" desc="Compact mark for app icons + favicons" url={ASSETS.rte} />
         </div>
       </section>
 

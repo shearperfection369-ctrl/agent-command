@@ -8,7 +8,7 @@ import {
 } from "@/lib/icons";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { JadeGenesisCard } from "../components/JadeGenesisCard";
+import { JadeGenesisCard, GenesisVolumeI } from "../components/JadeGenesisCard";
 
 const AGENTS = [
   { id: "support", label: "TIER-1 SUPPORT", color: "#ccff00", icon: Headset, title: "Customer Support Agent",
@@ -205,6 +205,11 @@ export default function Landing() {
             </p>
           </div>
           <JadeGenesisCard />
+
+          {/* Genesis · Volume I — episodic chapters */}
+          <div className="mt-24 lg:mt-32">
+            <GenesisVolumeI />
+          </div>
         </div>
       </section>
 
