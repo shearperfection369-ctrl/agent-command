@@ -47,6 +47,9 @@ STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_SENDER = os.environ.get("RESEND_SENDER", "onboarding@resend.dev")
+RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -2499,6 +2502,226 @@ async def promo_meta():
         return {"available": True, **json.loads(PROMO_META_PATH.read_text())}
     except Exception:
         return {"available": PROMO_VIDEO_PATH.exists()}
+
+
+# ============================================================
+# RESEND · transactional email send + delivery tracking
+# Closes the gap from `mailto:` handoff to first-class outbound channel.
+# ============================================================
+try:
+    import resend as _resend
+except Exception:
+    _resend = None
+
+
+def _resend_configured() -> bool:
+    return bool(_resend and RESEND_API_KEY)
+
+
+class ResendSendRequest(BaseModel):
+    to: EmailStr
+    subject: str
+    html: Optional[str] = None
+    text: Optional[str] = None
+    reply_to: Optional[EmailStr] = None
+    sender: Optional[str] = None  # override default sender
+    tags: Optional[Dict[str, str]] = None  # e.g. {"campaign": "prospect_outreach"}
+
+
+async def _resend_send(payload: dict) -> dict:
+    """Call Resend in a thread to keep the event loop free."""
+    if not _resend_configured():
+        raise HTTPException(503, "Resend not configured — set RESEND_API_KEY in /app/backend/.env")
+    _resend.api_key = RESEND_API_KEY
+    return await asyncio.to_thread(_resend.Emails.send, payload)
+
+
+@api.post("/resend/send")
+async def resend_send_email(body: ResendSendRequest, _: str = Depends(require_admin)):
+    """Send a transactional email via Resend. Persists a sends record for delivery tracking."""
+    if not body.html and not body.text:
+        raise HTTPException(400, "Provide html and/or text body")
+    params = {
+        "from": body.sender or RESEND_SENDER,
+        "to": [str(body.to)],
+        "subject": body.subject,
+    }
+    if body.html: params["html"] = body.html
+    if body.text: params["text"] = body.text
+    if body.reply_to: params["reply_to"] = str(body.reply_to)
+    if body.tags:
+        params["tags"] = [{"name": k, "value": v} for k, v in body.tags.items()]
+
+    try:
+        result = await _resend_send(params)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("resend send failed")
+        raise HTTPException(500, f"Resend send failed: {e}")
+
+    record = {
+        "id": str(uuid.uuid4()),
+        "resend_id": result.get("id"),
+        "to": str(body.to),
+        "from_": params["from"],
+        "subject": body.subject,
+        "tags": body.tags or {},
+        "status": "sent",
+        "events": [{"type": "sent", "at": _utcnow_iso()}],
+        "created_at": _utcnow_iso(),
+    }
+    await db.email_sends.insert_one(record)
+    record.pop("_id", None)
+    return record
+
+
+class ProspectSendRequest(BaseModel):
+    """Send a prospect's pre-drafted email via Resend (instead of mailto:).
+
+    Frontend posts the pkg from /prospects/{id}/email-draft directly here.
+    """
+    prospect_id: str
+    subject: str
+    body: str  # plain-text body — server converts to HTML on the wire
+    sender: Optional[str] = None
+
+
+def _plain_to_html(text: str) -> str:
+    """Light wrap — preserves newlines, no external CSS, email-safe."""
+    safe = (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    paragraphs = safe.split("\n\n")
+    html_parts = [
+        f'<p style="margin:0 0 16px;font:14px/1.55 Inter,Helvetica,Arial,sans-serif;color:#1a1a1a">{p.replace(chr(10), "<br>")}</p>'
+        for p in paragraphs if p.strip()
+    ]
+    return (
+        '<table cellpadding="0" cellspacing="0" border="0" width="100%" '
+        'style="background:#ffffff;padding:24px 0">'
+        '<tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" width="560" '
+        'style="max-width:560px"><tr><td>'
+        + "".join(html_parts)
+        + '<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #e5e5e5;'
+          'font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#888">'
+          'Sent via <b style="color:#7aaf00">JADE&nbsp;OS</b> · onejades.com</p>'
+        + '</td></tr></table></td></tr></table>'
+    )
+
+
+@api.post("/prospects/{pid}/send-via-resend")
+async def prospect_send_via_resend(pid: str, body: ProspectSendRequest, _: str = Depends(require_admin)):
+    """Send the drafted solicitation email directly via Resend (one click, no mailto handoff)."""
+    p = await db.prospects.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Prospect not found")
+    html = _plain_to_html(body.body)
+    params = {
+        "from": body.sender or RESEND_SENDER,
+        "to": [p["email"]],
+        "subject": body.subject,
+        "text": body.body,
+        "html": html,
+        "tags": [
+            {"name": "campaign", "value": "prospect_outreach"},
+            {"name": "industry", "value": p.get("industry", "general")},
+            {"name": "prospect_id", "value": pid},
+        ],
+        "reply_to": "cummins_oliver@yahoo.com",
+    }
+    try:
+        result = await _resend_send(params)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("prospect resend failed")
+        raise HTTPException(500, f"Resend send failed: {e}")
+
+    send_id = str(uuid.uuid4())
+    await db.email_sends.insert_one({
+        "id": send_id,
+        "resend_id": result.get("id"),
+        "to": p["email"],
+        "from_": params["from"],
+        "subject": body.subject,
+        "tags": {"campaign": "prospect_outreach", "industry": p.get("industry"), "prospect_id": pid},
+        "status": "sent",
+        "events": [{"type": "sent", "at": _utcnow_iso()}],
+        "created_at": _utcnow_iso(),
+    })
+    await db.prospects.update_one({"id": pid}, {"$set": {
+        "contacted": True, "contacted_at": _utcnow_iso(),
+        "last_send_id": send_id, "last_resend_id": result.get("id"),
+    }})
+    return {"ok": True, "send_id": send_id, "resend_id": result.get("id")}
+
+
+@api.get("/resend/status")
+async def resend_status(_: str = Depends(require_admin)):
+    """Quick health check for the Resend integration."""
+    return {
+        "configured": _resend_configured(),
+        "sender": RESEND_SENDER if _resend_configured() else None,
+        "sdk_installed": _resend is not None,
+        "has_key": bool(RESEND_API_KEY),
+        "has_webhook_secret": bool(RESEND_WEBHOOK_SECRET),
+    }
+
+
+@api.get("/resend/sends")
+async def resend_sends_list(limit: int = 100, _: str = Depends(require_admin)):
+    """List recent email sends with their latest status + event timeline."""
+    docs = await db.email_sends.find({}, {"_id": 0}).sort("created_at", -1).limit(min(limit, 500)).to_list(min(limit, 500))
+    return docs
+
+
+@api.post("/webhooks/resend")
+async def resend_webhook(request: Request):
+    """Inbound Resend webhook — updates the send record with delivery/open/click/bounce events.
+
+    Signature verification (svix) is wired but optional: if RESEND_WEBHOOK_SECRET is set
+    AND the svix-id/svix-timestamp/svix-signature headers are present, we verify.
+    Otherwise we accept (suitable for early dev / Resend's testing mode).
+    """
+    raw = await request.body()
+    headers = dict(request.headers)
+
+    if RESEND_WEBHOOK_SECRET and headers.get("svix-signature"):
+        try:
+            from svix.webhooks import Webhook  # ships transitively with resend
+            wh = Webhook(RESEND_WEBHOOK_SECRET)
+            wh.verify(raw, headers)
+        except Exception as e:
+            log.warning(f"resend webhook signature invalid: {e}")
+            raise HTTPException(400, "invalid signature")
+
+    try:
+        evt = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "invalid JSON")
+
+    # Resend event schema: {type: "email.delivered", data: {email_id, to, ...}, created_at}
+    event_type = (evt.get("type") or "").lower()       # email.sent / .delivered / .opened / .clicked / .bounced / .complained / .delivery_delayed
+    data = evt.get("data") or {}
+    resend_id = data.get("email_id") or data.get("id")
+    status = event_type.split(".")[-1] if event_type else "unknown"
+
+    if resend_id:
+        await db.email_sends.update_one(
+            {"resend_id": resend_id},
+            {
+                "$set": {"status": status, "last_event_at": _utcnow_iso()},
+                "$push": {"events": {"type": event_type, "at": _utcnow_iso(), "data": data}},
+            },
+        )
+    # Always store raw inbound for audit
+    await db.resend_inbound.insert_one({
+        "id": str(uuid.uuid4()),
+        "event_type": event_type,
+        "resend_id": resend_id,
+        "raw": evt,
+        "created_at": _utcnow_iso(),
+    })
+    return {"ok": True}
 
 
 # -------------------- Startup: seed admin --------------------

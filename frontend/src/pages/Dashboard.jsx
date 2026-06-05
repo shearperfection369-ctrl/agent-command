@@ -1045,6 +1045,13 @@ function ProspectsPanel() {
 
 function EmailDraftModal({ data, onClose, onSent }) {
   const { prospect, pkg, loading } = data;
+  const [resendStatus, setResendStatus] = useState(null);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    api.get("/resend/status").then((r) => setResendStatus(r.data)).catch(() => setResendStatus({ configured: false }));
+  }, []);
+
   const copy = (text, label) => {
     navigator.clipboard.writeText(text).then(
       () => toast.success(`${label} copied`),
@@ -1054,6 +1061,28 @@ function EmailDraftModal({ data, onClose, onSent }) {
   const mailto = pkg
     ? `mailto:${encodeURIComponent(prospect.email)}?subject=${encodeURIComponent(pkg.subject || "")}&body=${encodeURIComponent(pkg.body || "")}`
     : "#";
+
+  const sendViaResend = async () => {
+    if (!pkg) return;
+    if (!resendStatus?.configured) {
+      toast.error("Resend not configured — add RESEND_API_KEY in /app/backend/.env");
+      return;
+    }
+    setSending(true);
+    try {
+      await api.post(`/prospects/${prospect.id}/send-via-resend`, {
+        prospect_id: prospect.id,
+        subject: pkg.subject,
+        body: pkg.body,
+      }, { timeout: 30000 });
+      toast.success(`Sent → ${prospect.email}`);
+      setTimeout(onSent, 300);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Send failed.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div
@@ -1127,14 +1156,24 @@ function EmailDraftModal({ data, onClose, onSent }) {
               </div>
             )}
 
-            <div className="pt-4 border-t border-white/10 flex flex-wrap gap-2">
+            <div className="pt-4 border-t border-white/10 flex flex-wrap gap-2 items-center">
+              <button
+                data-testid="email-draft-send-resend"
+                onClick={sendViaResend}
+                disabled={sending || !resendStatus?.configured}
+                className="btn-jade inline-flex items-center gap-2"
+                title={resendStatus?.configured ? `Send from ${resendStatus.sender}` : "Resend not configured"}
+              >
+                <Lightning size={14} weight="bold" />
+                {sending ? "SENDING…" : "SEND VIA JADE"}
+              </button>
               <a
                 data-testid="email-draft-mailto"
                 href={mailto}
                 onClick={() => setTimeout(onSent, 500)}
-                className="btn-jade inline-flex items-center gap-2"
+                className="btn-ghost inline-flex items-center gap-2"
               >
-                <EnvelopeSimple size={14} weight="bold" /> OPEN IN EMAIL CLIENT
+                <EnvelopeSimple size={14} weight="bold" /> OPEN IN MAIL CLIENT
               </a>
               <button
                 data-testid="email-draft-copy-subject"
@@ -1157,6 +1196,22 @@ function EmailDraftModal({ data, onClose, onSent }) {
               >
                 COPY ALL
               </button>
+              {resendStatus && !resendStatus.configured && (
+                <span
+                  className="font-mono-tech text-[10px] text-[#ff3b8a] ml-auto"
+                  data-testid="resend-not-configured"
+                >
+                  // resend not configured — using mailto fallback
+                </span>
+              )}
+              {resendStatus?.configured && (
+                <span
+                  className="font-mono-tech text-[10px] text-white/45 ml-auto"
+                  data-testid="resend-configured"
+                >
+                  from: {resendStatus.sender}
+                </span>
+              )}
             </div>
           </div>
         )}

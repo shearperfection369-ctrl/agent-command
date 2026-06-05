@@ -28,3 +28,4 @@ pypdf==6.12.2
 stripe==14.4.1
 emergentintegrations==0.2.0
 twilio==9.10.9
+resend==2.30.1
