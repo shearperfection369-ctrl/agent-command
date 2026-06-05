@@ -2670,9 +2670,13 @@ PROMO_VIDEO_PATH = Path("/app/static/jadeos_promo.mp4")
 PROMO_META_PATH = Path("/app/static/jadeos_promo.json")
 PROMO_V2_PATH = Path("/app/static/jadeos_promo_v2.mp4")
 PROMO_V2_META = Path("/app/static/jadeos_promo_v2.json")
+PROMO_V3_PATH = Path("/app/static/jadeos_promo_v3.mp4")
+PROMO_V3_META = Path("/app/static/jadeos_promo_v3.json")
 
 
 def _active_promo():
+    if PROMO_V3_PATH.exists() and PROMO_V3_META.exists():
+        return PROMO_V3_PATH, PROMO_V3_META
     if PROMO_V2_PATH.exists() and PROMO_V2_META.exists():
         return PROMO_V2_PATH, PROMO_V2_META
     return PROMO_VIDEO_PATH, PROMO_META_PATH
@@ -2680,11 +2684,13 @@ def _active_promo():
 
 @api.get("/promo/video")
 async def promo_video(v: Optional[int] = None):
-    """Stream the JADE OS promotional reel. `?v=1` or `?v=2` pins a version; omit for newest."""
+    """Stream the JADE OS promotional reel. `?v=1`, `?v=2`, or `?v=3` pins a version; omit for newest."""
     if v == 1:
         path = PROMO_VIDEO_PATH
     elif v == 2:
         path = PROMO_V2_PATH
+    elif v == 3:
+        path = PROMO_V3_PATH
     else:
         path, _ = _active_promo()
     if not path.exists():
@@ -2704,12 +2710,15 @@ async def promo_meta(v: Optional[int] = None):
         meta_path, vid_path = PROMO_META_PATH, PROMO_VIDEO_PATH
     elif v == 2:
         meta_path, vid_path = PROMO_V2_META, PROMO_V2_PATH
+    elif v == 3:
+        meta_path, vid_path = PROMO_V3_META, PROMO_V3_PATH
     else:
         vid_path, meta_path = _active_promo()
     if not meta_path.exists():
         return {"available": False, "versions_available": {
             "v1": PROMO_VIDEO_PATH.exists(),
             "v2": PROMO_V2_PATH.exists(),
+            "v3": PROMO_V3_PATH.exists(),
         }}
     try:
         data = json.loads(meta_path.read_text())
@@ -2719,6 +2728,7 @@ async def promo_meta(v: Optional[int] = None):
     data["versions_available"] = {
         "v1": PROMO_VIDEO_PATH.exists(),
         "v2": PROMO_V2_PATH.exists(),
+        "v3": PROMO_V3_PATH.exists(),
     }
     return data
 

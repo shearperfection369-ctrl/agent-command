@@ -743,17 +743,30 @@ Built by an operator, for operators.
               {meta.model && <span className="text-white/40"> · {meta.model}</span>}
             </div>
             <div className="flex items-center gap-3">
-              {meta.versions_available && (meta.versions_available.v1 || meta.versions_available.v2) && (
+              {meta.versions_available && (meta.versions_available.v1 || meta.versions_available.v2 || meta.versions_available.v3) && (
                 <div className="flex items-center gap-1" data-testid="promo-version-toggle">
                   <span className="mono-label text-[10px] text-white/35 mr-1">VERSION</span>
+                  {meta.versions_available.v3 && (
+                    <button
+                      data-testid="promo-version-v3"
+                      onClick={() => setVersion(3)}
+                      className="px-2 py-1 mono-label text-[10px] border"
+                      style={{
+                        borderColor: (version === 3 || (version == null && meta.versions_available.v3)) ? "#ccff00" : "rgba(255,255,255,0.12)",
+                        color: (version === 3 || (version == null && meta.versions_available.v3)) ? "#ccff00" : "rgba(255,255,255,0.55)",
+                      }}
+                    >
+                      V3 · SPLIT OPS
+                    </button>
+                  )}
                   {meta.versions_available.v2 && (
                     <button
                       data-testid="promo-version-v2"
                       onClick={() => setVersion(2)}
                       className="px-2 py-1 mono-label text-[10px] border"
                       style={{
-                        borderColor: (version === 2 || (version == null && meta.versions_available.v2)) ? "#ccff00" : "rgba(255,255,255,0.12)",
-                        color: (version === 2 || (version == null && meta.versions_available.v2)) ? "#ccff00" : "rgba(255,255,255,0.55)",
+                        borderColor: version === 2 ? "#00ffff" : "rgba(255,255,255,0.12)",
+                        color: version === 2 ? "#00ffff" : "rgba(255,255,255,0.55)",
                       }}
                     >
                       V2 · PRO
@@ -765,8 +778,8 @@ Built by an operator, for operators.
                       onClick={() => setVersion(1)}
                       className="px-2 py-1 mono-label text-[10px] border"
                       style={{
-                        borderColor: version === 1 ? "#00ffff" : "rgba(255,255,255,0.12)",
-                        color: version === 1 ? "#00ffff" : "rgba(255,255,255,0.55)",
+                        borderColor: version === 1 ? "#7c5cff" : "rgba(255,255,255,0.12)",
+                        color: version === 1 ? "#7c5cff" : "rgba(255,255,255,0.55)",
                       }}
                     >
                       V1
