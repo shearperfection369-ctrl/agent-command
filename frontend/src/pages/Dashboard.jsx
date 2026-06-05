@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { api } from "../lib/api";
 import { isAuthed } from "../lib/auth";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
-import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus, Lightning } from "@/lib/icons";
+import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus, Lightning, EnvelopeSimple } from "@/lib/icons";
+import { INDUSTRIES } from "../lib/industries";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -105,7 +106,12 @@ export default function Dashboard() {
       <section className="px-6 lg:px-10 py-10">
         <div className="max-w-[1400px] mx-auto">
           {tab === "lighthouse" && <LighthousePanel apps={lighthouse} reload={load} />}
-          {tab === "leads" && <LeadsTable leads={leads} updateLead={updateLead} />}
+          {tab === "leads" && (
+            <div className="space-y-6">
+              <ProspectsPanel />
+              <LeadsTable leads={leads} updateLead={updateLead} />
+            </div>
+          )}
           {tab === "runs" && <RunsTable runs={runs} />}
           {tab === "orgs" && <OrgsTable orgs={orgs} />}
           {tab === "hooks" && <WebhooksPanel hooks={hooks} reload={load} />}
@@ -806,6 +812,354 @@ Built by an operator, for operators.
         <p className="font-mono-tech text-[11px] text-white/65 leading-relaxed whitespace-pre-wrap">
           {meta.prompt}
         </p>
+      </div>
+    </div>
+  );
+}
+
+
+
+// ============================================================
+// PROSPECTS PANEL — sits above the LeadsTable. AI-generates
+// Minneapolis-area B2B prospects per industry, drafts tailored
+// solicitation email packages, hands off to default mail client.
+// ============================================================
+function ProspectsPanel() {
+  const [industry, setIndustry] = useState("freight_brokerage");
+  const [count, setCount] = useState(8);
+  const [generating, setGenerating] = useState(false);
+  const [prospects, setProspects] = useState([]);
+  const [filterIndustry, setFilterIndustry] = useState("");
+  const [draftFor, setDraftFor] = useState(null); // {prospect, pkg, loading}
+
+  const load = async (ind) => {
+    try {
+      const params = ind ? { industry: ind } : {};
+      const { data } = await api.get("/prospects", { params });
+      setProspects(data);
+    } catch {
+      toast.error("Failed to load prospects.");
+    }
+  };
+
+  useEffect(() => { load(filterIndustry); }, [filterIndustry]);
+
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      const { data } = await api.post("/prospects/generate", { industry, count }, { timeout: 90000 });
+      toast.success(`Generated ${data.count} ${industry.replace(/_/g, " ")} prospects`);
+      setFilterIndustry(industry);
+      await load(industry);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Generation failed.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const del = async (id) => {
+    if (!confirm("Delete this prospect?")) return;
+    try { await api.delete(`/prospects/${id}`); load(filterIndustry); }
+    catch { toast.error("Delete failed."); }
+  };
+
+  const markContacted = async (id) => {
+    try { await api.patch(`/prospects/${id}/contacted`); load(filterIndustry); toast.success("Marked contacted."); }
+    catch { toast.error("Failed."); }
+  };
+
+  const draftEmail = async (p) => {
+    setDraftFor({ prospect: p, pkg: null, loading: true });
+    try {
+      const { data } = await api.post(`/prospects/${p.id}/email-draft`, {}, { timeout: 60000 });
+      setDraftFor({ prospect: p, pkg: data, loading: false });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Email draft failed.");
+      setDraftFor(null);
+    }
+  };
+
+  const scoreColor = (s) =>
+    s >= 85 ? "#ccff00" : s >= 70 ? "#00ffff" : s >= 55 ? "#7c5cff" : "#ff3b8a";
+
+  return (
+    <div className="space-y-4" data-testid="prospects-panel">
+      {/* Generate strip */}
+      <div className="deck-card p-6 relative" data-testid="prospects-generate">
+        <CornerBrackets />
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:justify-between">
+          <div>
+            <div className="mono-label text-[#ccff00] mb-1 flex items-center gap-2">
+              <Lightning size={12} weight="bold" /> PROSPECTS · MSP-AREA LEAD MINING
+            </div>
+            <p className="text-xs text-white/55 max-w-xl leading-relaxed">
+              JADE synthesizes realistic Minneapolis-St. Paul B2B prospects per industry —
+              role, company, plausible email, pain-point + a tailored hook + a fit score. Then drafts
+              the cold-outreach package on demand.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              data-testid="prospects-industry-select"
+              className="input-tech text-xs py-2"
+              value={industry}
+              onChange={(e) => setIndustry(e.target.value)}
+            >
+              {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+            </select>
+            <input
+              data-testid="prospects-count-input"
+              type="number"
+              min={1}
+              max={12}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(12, parseInt(e.target.value || "1", 10))))}
+              className="input-tech text-xs py-2 w-[80px]"
+            />
+            <button
+              data-testid="prospects-generate-btn"
+              onClick={generate}
+              disabled={generating}
+              className="btn-jade inline-flex items-center gap-2 px-5"
+            >
+              <Lightning size={14} weight="bold" />
+              {generating ? "MINING…" : "GENERATE"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter + list */}
+      <div className="deck-card relative" data-testid="prospects-table">
+        <CornerBrackets />
+        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between flex-wrap gap-3">
+          <div className="mono-label text-[#00ffff]">PROSPECT POOL · {prospects.length}</div>
+          <div className="flex items-center gap-2">
+            <span className="mono-label text-white/40 text-[10px]">FILTER</span>
+            <select
+              data-testid="prospects-filter-select"
+              className="input-tech text-xs py-1.5"
+              value={filterIndustry}
+              onChange={(e) => setFilterIndustry(e.target.value)}
+            >
+              <option value="">ALL INDUSTRIES</option>
+              {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {prospects.length === 0 ? (
+          <div className="p-10 text-center font-mono-tech text-xs text-white/40" data-testid="prospects-empty">
+            // pool empty — pick an industry above and hit GENERATE
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/5">
+                  {["SCORE", "COMPANY · OPERATOR", "INDUSTRY", "PAIN + HOOK", "ACTIONS"].map((h) => (
+                    <th key={h} className="p-4 text-left mono-label text-white/40">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prospects.map((p) => (
+                  <tr
+                    key={p.id}
+                    data-testid={`prospect-row-${p.id}`}
+                    className={`border-b border-white/5 hover:bg-white/[0.02] ${p.contacted ? "opacity-55" : ""}`}
+                  >
+                    <td className="p-4 w-[80px]">
+                      <div
+                        className="font-display font-black text-3xl tracking-tighter"
+                        style={{ color: scoreColor(p.jade_fit_score) }}
+                      >
+                        {p.jade_fit_score}
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="text-white font-display font-bold">{p.company}</div>
+                      <div className="font-mono-tech text-[11px] text-white/65 mt-1">{p.name} · {p.title}</div>
+                      <div className="font-mono-tech text-[10px] text-white/45 mt-0.5">
+                        {p.email} · {p.city} · {p.company_size}
+                      </div>
+                    </td>
+                    <td className="p-4 w-[160px] mono-label text-[#00ffff] text-[10px]">
+                      {p.industry.replace(/_/g, " ").toUpperCase()}
+                    </td>
+                    <td className="p-4 max-w-[440px]">
+                      <div className="text-xs text-white/80 leading-relaxed">{p.pain_point}</div>
+                      <div className="font-mono-tech text-[10px] text-[#ccff00] mt-2 italic leading-relaxed">
+                        “{p.hook}”
+                      </div>
+                    </td>
+                    <td className="p-4 w-[180px]">
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          data-testid={`prospect-email-${p.id}`}
+                          onClick={() => draftEmail(p)}
+                          className="btn-jade text-xs py-1.5 inline-flex items-center justify-center gap-1.5"
+                        >
+                          <EnvelopeSimple size={11} weight="bold" /> DRAFT EMAIL
+                        </button>
+                        <div className="flex gap-1.5">
+                          {!p.contacted && (
+                            <button
+                              data-testid={`prospect-contacted-${p.id}`}
+                              onClick={() => markContacted(p.id)}
+                              className="btn-ghost text-[10px] px-2 py-1 flex-1"
+                              title="Mark as contacted"
+                            >
+                              ✓ SENT
+                            </button>
+                          )}
+                          {p.contacted && (
+                            <span className="mono-label text-[10px] text-[#ccff00] flex-1 inline-flex items-center justify-center border border-[#ccff0033] py-1">
+                              CONTACTED
+                            </span>
+                          )}
+                          <button
+                            data-testid={`prospect-del-${p.id}`}
+                            onClick={() => del(p.id)}
+                            className="btn-ghost text-xs px-2 py-1 text-[#ff3b8a]"
+                            title="Delete prospect"
+                          >
+                            <TrashSimple size={11} weight="bold" />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {draftFor && <EmailDraftModal data={draftFor} onClose={() => setDraftFor(null)} onSent={() => { markContacted(draftFor.prospect.id); setDraftFor(null); }} />}
+    </div>
+  );
+}
+
+function EmailDraftModal({ data, onClose, onSent }) {
+  const { prospect, pkg, loading } = data;
+  const copy = (text, label) => {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`${label} copied`),
+      () => toast.error("Clipboard blocked")
+    );
+  };
+  const mailto = pkg
+    ? `mailto:${encodeURIComponent(prospect.email)}?subject=${encodeURIComponent(pkg.subject || "")}&body=${encodeURIComponent(pkg.body || "")}`
+    : "#";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm grid place-items-center px-4 py-10 overflow-y-auto"
+      onClick={onClose}
+      data-testid="email-draft-modal"
+    >
+      <div
+        className="deck-card relative max-w-3xl w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CornerBrackets />
+        <div className="p-6 border-b border-white/10 flex items-center justify-between gap-4">
+          <div>
+            <div className="mono-label text-[#ccff00] mb-1">SOLICITATION PACKAGE</div>
+            <div className="text-white font-display font-bold text-lg">
+              {prospect.name} · {prospect.company}
+            </div>
+            <div className="font-mono-tech text-[11px] text-white/55 mt-1">
+              → {prospect.email}
+            </div>
+          </div>
+          <button onClick={onClose} className="btn-ghost text-xs px-3" data-testid="email-draft-close">✕ CLOSE</button>
+        </div>
+
+        {loading && (
+          <div className="p-12 text-center font-mono-tech text-xs text-[#ccff00] animate-pulse" data-testid="email-draft-loading">
+            // JADE drafting tailored outreach package…
+          </div>
+        )}
+
+        {pkg && (
+          <div className="p-6 space-y-5">
+            <div>
+              <div className="mono-label text-white/40 text-[10px] mb-2">SUBJECT</div>
+              <div
+                className="font-display font-bold text-white text-lg border border-white/10 px-4 py-3 bg-black/40"
+                data-testid="email-draft-subject"
+              >
+                {pkg.subject}
+              </div>
+            </div>
+
+            <div>
+              <div className="mono-label text-white/40 text-[10px] mb-2">BODY</div>
+              <div
+                className="font-mono-tech text-xs text-white/85 leading-relaxed border border-white/10 p-4 bg-black/40 whitespace-pre-wrap"
+                data-testid="email-draft-body"
+              >
+                {pkg.body}
+              </div>
+            </div>
+
+            {pkg.talking_points?.length > 0 && (
+              <div>
+                <div className="mono-label text-[#00ffff] text-[10px] mb-2">TALKING POINTS</div>
+                <ul className="space-y-1.5">
+                  {pkg.talking_points.map((tp, i) => (
+                    <li key={i} className="font-mono-tech text-xs text-white/75 flex gap-2 leading-relaxed">
+                      <span className="text-[#ccff00]">▸</span>{tp}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {pkg.ps && (
+              <div>
+                <div className="mono-label text-[#7c5cff] text-[10px] mb-2">PS · ADD AS NEEDED</div>
+                <div className="font-mono-tech text-xs text-white/70 leading-relaxed italic">{pkg.ps}</div>
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-white/10 flex flex-wrap gap-2">
+              <a
+                data-testid="email-draft-mailto"
+                href={mailto}
+                onClick={() => setTimeout(onSent, 500)}
+                className="btn-jade inline-flex items-center gap-2"
+              >
+                <EnvelopeSimple size={14} weight="bold" /> OPEN IN EMAIL CLIENT
+              </a>
+              <button
+                data-testid="email-draft-copy-subject"
+                onClick={() => copy(pkg.subject, "Subject")}
+                className="btn-ghost text-xs"
+              >
+                COPY SUBJECT
+              </button>
+              <button
+                data-testid="email-draft-copy-body"
+                onClick={() => copy(pkg.body, "Body")}
+                className="btn-ghost text-xs"
+              >
+                COPY BODY
+              </button>
+              <button
+                data-testid="email-draft-copy-all"
+                onClick={() => copy(`Subject: ${pkg.subject}\n\n${pkg.body}`, "Full email")}
+                className="btn-ghost text-xs"
+              >
+                COPY ALL
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
