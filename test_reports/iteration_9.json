@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 9 · Risk Guard subsystem · FULL PASS. 26/26 backend pytest specs green covering rate-floor CRUD + audit, quote validation across all 5 severity bands (CLEAR/LOW/MEDIUM/HIGH/CRITICAL), HARD_BLOCK override-requires-notes contract, approve/reject workflow, formula-floor math (carrier_pay×1.12 + fuel), historical-floor (P25 of ≥3 actuals), audit hash-chain verify, alert persistence + ack-all, and webhooks Literal kind='alerts'. UI flow green: admin login → RISK GUARD tab renders 5 stat cards + 5 sub-views (validate/reviews/floors/alerts/audit). Validate bench produced CRITICAL/HARD_BLOCK with full floor candidates breakdown; floors CRUD created+deleted a row; review queue showed 22 rows; override prompt correctly required non-empty reason; audit verify clicked successfully. Regression tabs all render (one cosmetic mismatch: the test selectors 'admin-tab-operations' and 'admin-tab-design' resolve to different ids — the actual ids are 'lighthouse' and 'design_partners' per Dashboard.jsx; the tabs themselves render fine — no functional regression). The most critical contract — quote at or below cost_basis → severity=CRITICAL + decision=HARD_BLOCK + override-requires-notes — is verified end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9_risk_guard.py",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py · /api/quote-reviews/{id}/override is correctly enforced (returns 400 if notes missing) — the P0 contract is satisfied.",
+    "rate_floors.py · severity bands use ≤ inclusive boundaries (10% breach → MEDIUM not HIGH, 5% breach → LOW not MEDIUM). Verified at the 10% boundary. Matches the agent-to-agent context spec exactly.",
+    "rate_floors.py · `_lookup_historical_floor` uses idx = max(0, int(len(rates) * 0.25) - 1) — note the `- 1`. With 4 sorted actuals [1500,1600,1700,1800] the idx = max(0, 1-1) = 0 so P25 returns 1500. With exactly 3 actuals idx = max(0, 0-1) = 0 also. Conservative (lowest of the sorted samples) but maybe more conservative than the docstring 'p25' suggests — at small N this is effectively `min`. Not a bug, just a transparency note for the next agent.",
+    "audit_trail.py · _hash_event includes `prev` in the JSON but the verifier (verify_chain) passes prev_hash separately as the second arg to _hash_event — works because the function signature reads prev_hash from the kwarg. Chain integrity verified across 100+ events created during this run.",
+    "server.py · _dispatch_alert persists the alert to db.alerts BEFORE attempting webhook delivery — so even with zero alert-webhooks configured the alert still lands in db.alerts and an audit_event 'alert.fired' is recorded. Verified: TestAlerts unread/ack-all confirmed the persistence path.",
+    "server.py · /api/quote-reviews/{id}/approve and /reject accept ?notes= as a query string parameter (FastAPI default), which is fine but unusual; the override variant rejects empty/whitespace-only notes correctly. Frontend uses prompt() so this is consistent.",
+    "Dashboard.jsx · tab id 'risk' for the new RISK GUARD tab is wired correctly and renders RiskGuardPanel. Two pre-existing label/id mismatches confirmed (label 'OPERATIONS · LIGHTHOUSE' → id 'lighthouse'; label 'DESIGN PARTNERS' → id 'design_partners') — unchanged from iter 8, not a Risk Guard regression.",
+    "server.py is now 4981 lines — same recommendation as iter 7/8: split into routers/risk_guard.py + routers/claims.py + routers/memory.py. Still not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9_risk_guard.py (new — 26 specs, 100% pass)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@jadeos.ai / JadeOS!2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Per-run isolation via RUN_TAG (6-char hex) — created throwaway lanes (MSP<TAG>|DFW<TAG>|R53, PHX<TAG>|SEA<TAG>|V53, BOS<TAG>|MIA<TAG>|V53), one manual floor (deleted in teardown), 8+ quote_reviews (left in DB — they exercise the queue), 4 rate_actuals on the BOS/MIA lane (needed for historical-floor verification, left in DB), and one TEST_alerts_hook webhook (deleted). All alerts created during the run were acked via /api/alerts/ack-all in the test suite.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 9 fully validates the Risk Guard P0 contract: a quote at/below cost_basis ALWAYS returns CRITICAL + HARD_BLOCK, and HARD_BLOCK can only be cleared by /override with non-empty notes. Boundary cases nailed: 5.00% breach = LOW, 10.00% breach = MEDIUM, 10.01%+ = HIGH. Three-source floor layering verified: manual (explicit floor row), formula (carrier_pay × 1.12 + fuel), historical (P25 of ≥3 actuals). Gotchas for next agent: (1) /api/webhooks requires BOTH 'name' AND 'url' AND 'kind' — the iter9 test originally sent only 'label' and got a 422; fixed to send 'name' too. (2) /api/quote-reviews/{id}/approve|reject|override accept ?notes= as a query param, not in the JSON body. (3) When validating without a manual floor on the lane, formula+historical kick in automatically — make sure to use a unique-per-run lane key if you don't want previous test data to influence your floor. (4) Frontend RiskGuardPanel uses window.prompt for review override/approve/reject — Playwright must hook page.once('dialog', ...) BEFORE clicking the button. (5) Audit chain only breaks on actual tampering; verify_chain is safe to call repeatedly and returns ok=true with the running event count. (6) The 'operations' and 'design' tab id mismatch is pre-existing (label vs id) and unrelated to Risk Guard."
+}

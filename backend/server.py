@@ -2591,7 +2591,7 @@ class WebhookConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     url: str
-    kind: Literal["slack", "crm", "generic", "claims"] = "slack"
+    kind: Literal["slack", "crm", "generic", "claims", "alerts"] = "slack"
     active: bool = True
     created_at: str = Field(default_factory=_utcnow_iso)
 
@@ -2599,7 +2599,7 @@ class WebhookConfig(BaseModel):
 class WebhookConfigCreate(BaseModel):
     name: str
     url: str
-    kind: Literal["slack", "crm", "generic", "claims"] = "slack"
+    kind: Literal["slack", "crm", "generic", "claims", "alerts"] = "slack"
 
 
 @api.post("/webhooks", response_model=WebhookConfig)
@@ -4530,6 +4530,398 @@ async def claims_delete(claim_id: str, _: str = Depends(require_admin)):
     if res.deleted_count == 0:
         raise HTTPException(404, "Claim not found")
     return {"ok": True}
+
+
+# ============================================================
+# RISK GUARD · Rate Floors · Quote Validation · Reviews · Audit · Alerts
+# ============================================================
+import rate_floors as rf_mod
+import audit_trail as audit_mod
+
+
+async def _audit(actor: str, action: str, target_type: str, **kw):
+    """Thin wrapper so call sites stay readable."""
+    try:
+        await audit_mod.record(db, actor=actor, action=action, target_type=target_type, **kw)
+    except Exception as e:
+        log.warning("audit · record failed · %s · %s", action, e)
+
+
+async def _dispatch_alert(*, severity_label: str, title: str, body: str,
+                          metadata: Optional[Dict[str, Any]] = None) -> Dict:
+    """Fire an alert to: (a) every active alerts-webhook + (b) operator email
+    (queued via auto_followups when Resend unconfigured) + (c) admin banner
+    (read via /api/alerts/unread)."""
+    import httpx
+    now = _utcnow_iso()
+    payload = {
+        "severity": severity_label,
+        "title": title,
+        "body": body,
+        "metadata": metadata or {},
+        "fired_at": now,
+    }
+
+    # Persist for admin banner first — never lose an alert
+    alert_id = str(uuid.uuid4())
+    await db.alerts.insert_one({
+        "id": alert_id, "severity": severity_label, "title": title,
+        "body": body, "metadata": metadata or {}, "read": False,
+        "created_at": now,
+    })
+
+    # Webhooks
+    hooks = await db.webhooks.find({"kind": "alerts", "active": True}, {"_id": 0}).to_list(20)
+    delivered = 0
+    results: List[Dict] = []
+    if hooks:
+        async with httpx.AsyncClient(timeout=8.0) as cx:
+            for h in hooks:
+                ok = False
+                err = None
+                try:
+                    r = await cx.post(h["url"], json=payload)
+                    ok = 200 <= r.status_code < 300
+                    if not ok:
+                        err = f"HTTP {r.status_code}: {r.text[:200]}"
+                except Exception as e:
+                    err = str(e)
+                results.append({"webhook_id": h["id"], "ok": ok, "error": err})
+                if ok:
+                    delivered += 1
+                await db.webhook_deliveries.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "webhook_id": h["id"], "title": f"ALERT · {severity_label.upper()} · {title}",
+                    "body_preview": body[:280], "delivered": ok, "error": err,
+                    "created_at": now,
+                })
+
+    # Email — queue via Resend or hold for later flush
+    email_status: Optional[str] = None
+    operator_email = ADMIN_EMAIL
+    if operator_email:
+        try:
+            if _resend_configured():
+                await _resend_send({
+                    "from": RESEND_SENDER, "to": [operator_email],
+                    "subject": f"[JADE OS · {severity_label.upper()}] {title}",
+                    "html": f"<p><strong>{title}</strong></p><p>{body}</p><pre style='font-family:monospace;font-size:12px'>{json.dumps(metadata or {}, indent=2)}</pre>",
+                })
+                email_status = "sent"
+            else:
+                await db.auto_followups.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "channel": "email", "to": operator_email,
+                    "status": "queued",
+                    "payload": {"subject": f"[JADE OS · {severity_label.upper()}] {title}", "body": body, "metadata": metadata or {}},
+                    "error": "resend not configured",
+                    "created_at": now,
+                })
+                email_status = "queued"
+        except Exception as e:
+            email_status = f"error:{e}"
+
+    await _audit("system", "alert.fired", "alert", target_id=alert_id,
+                 metadata={"severity": severity_label, "webhook_delivered": delivered, "email": email_status})
+
+    return {"alert_id": alert_id, "webhook_delivered": delivered,
+            "webhook_results": results, "email": email_status}
+
+
+# ---- Rate Floors CRUD ----
+
+@api.post("/rate-floors")
+async def rate_floor_create(body: rf_mod.RateFloorCreate, admin: str = Depends(require_admin)):
+    lane_key = rf_mod.normalize_lane_key(
+        origin=body.origin, destination=body.destination,
+        equipment=body.equipment, explicit=body.lane_key,
+    )
+    f = rf_mod.RateFloor(
+        lane_key=lane_key,
+        origin=body.origin, destination=body.destination,
+        equipment=body.equipment,
+        floor_rate_usd=float(body.floor_rate_usd),
+        cost_basis_usd=body.cost_basis_usd,
+        required_margin_pct=body.required_margin_pct if body.required_margin_pct is not None else rf_mod.DEFAULT_MARGIN_PCT,
+        source=body.source,
+        rationale=body.rationale,
+        valid_until=body.valid_until,
+        created_by=admin,
+    ).model_dump()
+    await db.rate_floors.insert_one(f)
+    f.pop("_id", None)
+    await _audit(admin, "rate_floor.created", "rate_floor", target_id=f["id"], after=f,
+                 metadata={"lane_key": lane_key, "floor_rate_usd": f["floor_rate_usd"]})
+    return f
+
+
+@api.get("/rate-floors")
+async def rate_floors_list(lane_key: Optional[str] = None, equipment: Optional[str] = None,
+                            limit: int = 200, _: str = Depends(require_admin)):
+    q: Dict[str, Any] = {}
+    if lane_key:
+        q["lane_key"] = lane_key.upper()
+    if equipment:
+        q["equipment"] = equipment.upper()
+    docs = await db.rate_floors.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"floors": docs, "count": len(docs)}
+
+
+@api.delete("/rate-floors/{floor_id}")
+async def rate_floor_delete(floor_id: str, admin: str = Depends(require_admin)):
+    existing = await db.rate_floors.find_one({"id": floor_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Floor not found")
+    await db.rate_floors.delete_one({"id": floor_id})
+    await _audit(admin, "rate_floor.deleted", "rate_floor", target_id=floor_id, before=existing)
+    return {"ok": True}
+
+
+# ---- Rate Actuals (historical learning input) ----
+
+@api.post("/rate-actuals")
+async def rate_actual_record(body: Dict[str, Any], admin: str = Depends(require_admin)):
+    lane_key = rf_mod.normalize_lane_key(
+        origin=body.get("origin"), destination=body.get("destination"),
+        equipment=body.get("equipment", "V53"), explicit=body.get("lane_key"),
+    )
+    a = rf_mod.RateActual(
+        lane_key=lane_key,
+        equipment=body.get("equipment", "V53"),
+        quoted_rate_usd=float(body["quoted_rate_usd"]),
+        carrier_pay_usd=float(body.get("carrier_pay_usd") or 0),
+        fuel_surcharge_usd=float(body.get("fuel_surcharge_usd") or 0),
+        margin_pct=body.get("margin_pct"),
+        load_id=body.get("load_id"),
+        bol_number=body.get("bol_number"),
+    ).model_dump()
+    await db.rate_actuals.insert_one(a)
+    a.pop("_id", None)
+    await _audit(admin, "quote.actual.recorded", "rate_actual", target_id=a["id"], after=a)
+    return a
+
+
+# ---- Quote Validation (the core risk engine) ----
+
+@api.post("/quotes/validate")
+async def quote_validate(body: rf_mod.QuoteValidationRequest, admin: str = Depends(require_admin)):
+    """Submit a proposed quote for risk-engine validation. ALWAYS records an
+    audit event and ALWAYS persists a quote_reviews row (status=auto_ok if
+    no review needed). The agent must consume this endpoint BEFORE sending
+    a quote — that's the contract."""
+    lane_key = rf_mod.normalize_lane_key(
+        origin=body.origin, destination=body.destination,
+        equipment=body.equipment, explicit=body.lane_key,
+    )
+    floor_result = await rf_mod.compute_effective_floor(
+        db, lane_key=lane_key, equipment=body.equipment,
+        carrier_pay_usd=body.carrier_pay_usd, fuel_surcharge_usd=body.fuel_surcharge_usd,
+    )
+    winner = floor_result.get("winner")
+    candidates = floor_result.get("candidates", [])
+
+    if winner is None:
+        sev_result = {
+            "severity": "HIGH",  # no floor → conservative: queue review
+            "breach_amount_usd": 0.0, "breach_pct": 0.0,
+            "below_cost_basis": False, "floor_rate_usd": None, "cost_basis_usd": None,
+        }
+        decision: str = "QUEUE_REVIEW"
+        no_floor = True
+    else:
+        sev_result = rf_mod.severity_for(proposed_rate_usd=body.proposed_rate_usd, floor=winner)
+        decision = rf_mod.decision_for(sev_result["severity"])
+        no_floor = False
+
+    review = rf_mod.QuoteReview(
+        proposed_rate_usd=float(body.proposed_rate_usd),
+        floor_rate_usd=(winner or {}).get("floor_rate_usd"),
+        cost_basis_usd=(winner or {}).get("cost_basis_usd"),
+        breach_amount_usd=sev_result["breach_amount_usd"],
+        breach_pct=sev_result["breach_pct"],
+        severity=sev_result["severity"],
+        decision=decision,
+        floor_source=(winner or {}).get("source") if winner else "none",
+        floor_rationale=(winner or {}).get("rationale") if winner else "no protective floor found · escalated",
+        floor_candidates=candidates,
+        lane_key=lane_key,
+        origin=body.origin, destination=body.destination, equipment=body.equipment,
+        carrier_pay_usd=body.carrier_pay_usd, fuel_surcharge_usd=body.fuel_surcharge_usd,
+        load_id=body.load_id, bol_number=body.bol_number,
+        customer=body.customer,
+        memory_thread_id=body.memory_thread_id,
+        agent_rationale=body.agent_rationale,
+        status="auto_ok" if decision == "AUTO_OK" else "pending",
+        sla_due_at=rf_mod.sla_due_at(sev_result["severity"]) if decision != "AUTO_OK" else None,
+    ).model_dump()
+    await db.quote_reviews.insert_one(review)
+    review.pop("_id", None)
+
+    await _audit(
+        "agent", "quote.validated", "quote_review", target_id=review["id"],
+        after={"severity": review["severity"], "decision": review["decision"],
+               "proposed_rate_usd": review["proposed_rate_usd"],
+               "floor_rate_usd": review["floor_rate_usd"],
+               "lane_key": review["lane_key"]},
+        evidence_uris=[f"memory_thread:{body.memory_thread_id}"] if body.memory_thread_id else [],
+        metadata={"customer": body.customer, "load_id": body.load_id,
+                  "breach_amount_usd": review["breach_amount_usd"]},
+    )
+
+    # Fire alert for anything that requires review or blocks
+    if decision in ("QUEUE_REVIEW", "HARD_BLOCK"):
+        alert_sev = rf_mod.alert_severity_for(decision, sev_result["severity"])
+        await _dispatch_alert(
+            severity_label=alert_sev,
+            title=f"{sev_result['severity']} quote breach · {body.customer or 'unknown customer'} · {lane_key}",
+            body=(
+                f"Proposed ${body.proposed_rate_usd:,.2f} vs floor ${(winner or {}).get('floor_rate_usd', 0):,.2f}"
+                f" · breach ${review['breach_amount_usd']:,.2f} ({review['breach_pct']}%) · decision {decision}"
+                + ("\nNO PROTECTIVE FLOOR FOUND — agent must wait for manual review." if no_floor else "")
+            ),
+            metadata={"quote_review_id": review["id"], "severity": sev_result["severity"],
+                      "lane_key": lane_key, "load_id": body.load_id,
+                      "customer": body.customer, "memory_thread_id": body.memory_thread_id,
+                      "floor_candidates": candidates},
+        )
+        await _audit("system", "quote.review.created", "quote_review", target_id=review["id"],
+                     metadata={"severity": review["severity"], "decision": review["decision"]})
+
+    return review
+
+
+# ---- Quote Review queue ----
+
+@api.get("/quote-reviews")
+async def quote_reviews_list(status: Optional[str] = None, severity: Optional[str] = None,
+                              decision: Optional[str] = None, limit: int = 200,
+                              _: str = Depends(require_admin)):
+    q: Dict[str, Any] = {}
+    if status:
+        q["status"] = status
+    if severity:
+        q["severity"] = severity.upper()
+    if decision:
+        q["decision"] = decision.upper()
+    rows = await db.quote_reviews.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    pending = sum(1 for r in rows if r.get("status") == "pending")
+    blocking = sum(1 for r in rows if r.get("decision") == "HARD_BLOCK" and r.get("status") in ("pending", "overridden"))
+    return {"reviews": rows, "count": len(rows), "pending": pending, "hard_blocks": blocking}
+
+
+@api.post("/quote-reviews/{review_id}/approve")
+async def quote_review_approve(review_id: str, notes: Optional[str] = None,
+                                admin: str = Depends(require_admin)):
+    r = await db.quote_reviews.find_one({"id": review_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Review not found")
+    if r.get("status") not in ("pending", "auto_ok"):
+        raise HTTPException(400, f"Cannot approve review in status {r.get('status')}")
+    upd = {"status": "approved", "reviewer": admin, "reviewer_notes": notes,
+           "reviewed_at": _utcnow_iso()}
+    await db.quote_reviews.update_one({"id": review_id}, {"$set": upd})
+    after = {**r, **upd}
+    await _audit(admin, "quote.review.approved", "quote_review", target_id=review_id,
+                 before=r, after=after, metadata={"severity": r.get("severity"), "notes": notes})
+    return after
+
+
+@api.post("/quote-reviews/{review_id}/reject")
+async def quote_review_reject(review_id: str, notes: Optional[str] = None,
+                               admin: str = Depends(require_admin)):
+    r = await db.quote_reviews.find_one({"id": review_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Review not found")
+    if r.get("status") not in ("pending", "auto_ok"):
+        raise HTTPException(400, f"Cannot reject review in status {r.get('status')}")
+    upd = {"status": "rejected", "reviewer": admin, "reviewer_notes": notes,
+           "reviewed_at": _utcnow_iso()}
+    await db.quote_reviews.update_one({"id": review_id}, {"$set": upd})
+    after = {**r, **upd}
+    await _audit(admin, "quote.review.rejected", "quote_review", target_id=review_id,
+                 before=r, after=after, metadata={"severity": r.get("severity"), "notes": notes})
+    return after
+
+
+@api.post("/quote-reviews/{review_id}/override")
+async def quote_review_override(review_id: str, notes: Optional[str] = None,
+                                 admin: str = Depends(require_admin)):
+    """Operator override of a HARD_BLOCK. Notes are MANDATORY (we log them to the audit chain)."""
+    if not notes or not notes.strip():
+        raise HTTPException(400, "Override requires reviewer_notes explaining why")
+    r = await db.quote_reviews.find_one({"id": review_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Review not found")
+    if r.get("decision") != "HARD_BLOCK":
+        raise HTTPException(400, "Only HARD_BLOCK reviews require override")
+    upd = {"status": "overridden", "reviewer": admin, "reviewer_notes": notes,
+           "reviewed_at": _utcnow_iso()}
+    await db.quote_reviews.update_one({"id": review_id}, {"$set": upd})
+    after = {**r, **upd}
+    await _audit(admin, "quote.review.overridden", "quote_review", target_id=review_id,
+                 before=r, after=after,
+                 metadata={"severity": r.get("severity"), "breach_amount_usd": r.get("breach_amount_usd"),
+                           "notes": notes, "warning": "HARD_BLOCK overridden — operator accepts financial exposure"})
+    return after
+
+
+@api.get("/quote-reviews/{review_id}")
+async def quote_review_detail(review_id: str, _: str = Depends(require_admin)):
+    r = await db.quote_reviews.find_one({"id": review_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Review not found")
+    audit = await audit_mod.list_events(db, target_type="quote_review", target_id=review_id, limit=50)
+    return {"review": r, "audit": audit}
+
+
+# ---- Audit Trail ----
+
+@api.get("/audit/events")
+async def audit_events_list(target_type: Optional[str] = None,
+                             target_id: Optional[str] = None,
+                             actor: Optional[str] = None,
+                             action_prefix: Optional[str] = None,
+                             limit: int = 200,
+                             _: str = Depends(require_admin)):
+    rows = await audit_mod.list_events(
+        db, target_type=target_type, target_id=target_id,
+        actor=actor, action_prefix=action_prefix, limit=limit,
+    )
+    return {"events": rows, "count": len(rows)}
+
+
+@api.get("/audit/verify")
+async def audit_verify(limit: int = 1000, _: str = Depends(require_admin)):
+    """Re-hash the entire chain and confirm no event was tampered with."""
+    return await audit_mod.verify_chain(db, limit=limit)
+
+
+# ---- Alerts (admin banner) ----
+
+@api.get("/alerts/unread")
+async def alerts_unread(limit: int = 50, _: str = Depends(require_admin)):
+    rows = await db.alerts.find({"read": False}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"alerts": rows, "count": len(rows)}
+
+
+@api.get("/alerts")
+async def alerts_list(limit: int = 200, _: str = Depends(require_admin)):
+    rows = await db.alerts.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"alerts": rows, "count": len(rows)}
+
+
+@api.post("/alerts/{alert_id}/ack")
+async def alert_ack(alert_id: str, admin: str = Depends(require_admin)):
+    res = await db.alerts.update_one({"id": alert_id}, {"$set": {"read": True, "acked_by": admin, "acked_at": _utcnow_iso()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Alert not found")
+    return {"ok": True}
+
+
+@api.post("/alerts/ack-all")
+async def alerts_ack_all(admin: str = Depends(require_admin)):
+    res = await db.alerts.update_many({"read": False}, {"$set": {"read": True, "acked_by": admin, "acked_at": _utcnow_iso()}})
+    return {"acked": res.modified_count}
 
 
 # -------------------- Startup: seed admin --------------------
