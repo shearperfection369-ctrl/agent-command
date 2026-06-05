@@ -7,7 +7,7 @@ FastAPI backend providing:
 - Streaming Claude/OpenAI chat via Emergent universal key
 """
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Request
-from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1915,7 +1915,7 @@ class PortalSessionRequest(BaseModel):
 
 
 @api.post("/billing/portal-session")
-async def billing_portal_session(body: PortalSessionRequest):
+async def billing_portal_session(body: PortalSessionRequest, _: str = Depends(require_admin)):
     """Create a Stripe Customer Portal session so a customer can self-serve subscription mgmt."""
     if not STRIPE_API_KEY:
         raise HTTPException(500, "Stripe not configured")
@@ -2000,7 +2000,7 @@ class CustomerPlaybookCreate(BaseModel):
 
 
 @api.post("/playbooks/customer", response_model=Playbook)
-async def customer_playbook_create(body: CustomerPlaybookCreate):
+async def customer_playbook_create(body: CustomerPlaybookCreate, _: str = Depends(require_admin)):
     """Customers can build their own playbooks. Slug is auto-generated; org-scoped."""
     slug_base = body.name.lower().replace(" ", "_").replace("-", "_")
     slug_base = "".join(c for c in slug_base if c.isalnum() or c == "_")[:40] or "playbook"
@@ -2298,6 +2298,207 @@ async def admin_self_test(deep: bool = False, _: str = Depends(require_admin)):
         "ran_at": _utcnow_iso(),
     }
     return {"results": results, "summary": summary}
+
+
+# ============================================================
+# PROSPECTS · AI-generated Minneapolis-area leads per industry +
+# tailored solicitation email packages (mailto: handoff)
+# ============================================================
+INDUSTRY_PROSPECT_HINTS = {
+    "freight_brokerage": "Minneapolis-St. Paul freight brokers, 3PLs, dispatch shops — focus on Eagan, Bloomington, NE Minneapolis warehouse corridors. Realistic carrier names; 11-200 person ops; pain = load matching, BOL paperwork, after-hours dispatch.",
+    "logistics": "Twin Cities last-mile / regional fleet ops — Roseville, Brooklyn Park, Maple Grove. Pain = route planning, driver comms, customer ETAs.",
+    "manufacturing": "Minnesota precision manufacturers, medical-device suppliers, food processors — Plymouth, Eden Prairie, Coon Rapids. Pain = work-order intake, supplier follow-up, QA documentation.",
+    "healthcare": "Twin Cities specialty clinics, dental groups, behavioral health, urgent care — Edina, St. Louis Park, Woodbury. Pain = patient intake, prior auth, after-hours triage. NEVER invent regulated data.",
+    "saas": "Minneapolis B2B SaaS startups (10-100 FTE) — North Loop, Northeast. Pain = lead qualification, support overflow, onboarding sequences.",
+    "ecommerce": "MN DTC / Shopify-Plus brands and Mall-of-America-adjacent retailers. Pain = order support, RMA workflow, abandoned-cart sequences.",
+    "insurance": "Independent agencies / commercial brokers — St. Paul, Wayzata. Pain = COI requests, claim FNOL intake, renewal follow-up.",
+    "legal": "Boutique firms — IP, family, immigration, employment. Twin Cities suburbs. Pain = intake screening, conflict checks, document review.",
+    "real_estate": "Commercial property managers & multifamily ops — downtown Mpls, Uptown, St. Paul. Pain = tenant work-orders, lease admin, vendor coordination.",
+    "professional_services": "MSP-area agencies / consultancies (marketing, fractional CFO, IT-MSP). Pain = lead intake, proposal generation, SOW drafting.",
+    "general": "Minneapolis-St. Paul SMBs (11-200 FTE) across mixed sectors. Pain = the operator drowning in ops work.",
+}
+
+
+PROSPECT_GEN_SYS = (
+    "You generate realistic prospective B2B sales leads for JADE OS — an AI-agent platform for ops-heavy SMBs. "
+    "Each prospect MUST be plausible (real-sounding company name in the Minneapolis-St. Paul metro, realistic role title, "
+    "plausible email at a company domain, a specific operational pain). Do NOT use real famous brands. "
+    "Generate diverse roles (Director of Operations, COO, Dispatch Manager, Practice Admin, RevOps Lead, etc.). "
+    "Return ONLY JSON: {\"prospects\": [{\"company\": str, \"name\": str, \"title\": str, \"email\": str, \"city\": str, "
+    "\"company_size\": str (e.g. '25-50'), \"pain_point\": str (1 sentence, specific), \"hook\": str (1-sentence opening "
+    "line JADE could use), \"jade_fit_score\": int 0-100, \"recommended_agent\": str (one of: "
+    "qualify_lead/extract/support_triage/draft_outreach/playbook)}]} "
+    "Score reflects how strong a JADE OS fit they are."
+)
+
+
+class ProspectRequest(BaseModel):
+    industry: str = "general"
+    count: int = 8
+
+
+@api.post("/prospects/generate")
+async def prospects_generate(body: ProspectRequest, _: str = Depends(require_admin)):
+    """LLM-generate a list of realistic Minneapolis-area B2B prospects for a given industry.
+
+    These are AI-synthesized — useful for outreach planning, role-play, and seeding the leads pipe.
+    They are NOT pulled from a real lead database (no Apollo/ZoomInfo wired). Saved to db.prospects.
+    """
+    count = max(1, min(int(body.count or 8), 12))
+    hint = INDUSTRY_PROSPECT_HINTS.get(body.industry, INDUSTRY_PROSPECT_HINTS["general"])
+    session = str(uuid.uuid4())
+    chat = _llm(session, PROSPECT_GEN_SYS, "anthropic")
+    user_msg = (
+        f"Industry: {body.industry}\n"
+        f"Region hint: {hint}\n"
+        f"Generate exactly {count} prospects. Vary city, size, and role. "
+        f"Make pain_points concrete (not generic). Score range 55-95 — no obviously bad fits. "
+        f"Emails should be at lowercase @company-derived domains."
+    )
+    raw = []
+    async for ev in chat.stream_message(UserMessage(text=user_msg)):
+        if isinstance(ev, TextDelta):
+            raw.append(ev.content)
+        elif isinstance(ev, StreamDone):
+            break
+    try:
+        data = json.loads(_strip_json("".join(raw)))
+        prospects = data.get("prospects", [])
+    except Exception as e:
+        log.exception("prospect parse failed")
+        raise HTTPException(500, f"LLM JSON parse failed: {e}")
+
+    # Stamp + persist
+    batch_id = str(uuid.uuid4())
+    now = _utcnow_iso()
+    docs = []
+    for p in prospects:
+        docs.append({
+            "id": str(uuid.uuid4()),
+            "batch_id": batch_id,
+            "industry": body.industry,
+            "company": p.get("company", "Unknown"),
+            "name": p.get("name", "Unknown"),
+            "title": p.get("title", "—"),
+            "email": (p.get("email") or "").lower(),
+            "city": p.get("city", "Minneapolis"),
+            "company_size": p.get("company_size", "11-50"),
+            "pain_point": p.get("pain_point", ""),
+            "hook": p.get("hook", ""),
+            "jade_fit_score": int(p.get("jade_fit_score", 70)),
+            "recommended_agent": p.get("recommended_agent", "qualify_lead"),
+            "created_at": now,
+            "contacted": False,
+        })
+    if docs:
+        await db.prospects.insert_many(docs)
+    await _log_run("qualify_lead", "anthropic", DEFAULT_MODELS["anthropic"],
+                   f"[prospects · {body.industry}]", f"generated {len(docs)} prospects")
+    # Return without _id (insert_many mutates docs to add _id)
+    for d in docs:
+        d.pop("_id", None)
+    return {"batch_id": batch_id, "industry": body.industry, "count": len(docs), "prospects": docs}
+
+
+@api.get("/prospects")
+async def prospects_list(industry: Optional[str] = None, _: str = Depends(require_admin)):
+    q = {"industry": industry} if industry else {}
+    docs = await db.prospects.find(q, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    return docs
+
+
+@api.delete("/prospects/{pid}")
+async def prospects_delete(pid: str, _: str = Depends(require_admin)):
+    res = await db.prospects.delete_one({"id": pid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+@api.patch("/prospects/{pid}/contacted")
+async def prospects_mark_contacted(pid: str, _: str = Depends(require_admin)):
+    res = await db.prospects.update_one({"id": pid}, {"$set": {"contacted": True, "contacted_at": _utcnow_iso()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+OUTREACH_EMAIL_SYS = (
+    "You are JADE's outbound copywriter. Voice: short, operator-grade, no marketing fluff, no exclamation marks. "
+    "Write a cold-outreach email package from Oliver Cummins (founder of JADE OS — onejades.com) to a Minneapolis-area "
+    "operator. Include a specific reference to their pain point. Email body 90-140 words, opens with the hook, "
+    "includes one concrete claim (e.g. 'cuts intake time ~60%'), and ends with a 15-min call CTA. "
+    "ALSO include a 'package' — 3 bullet talking points and a one-paragraph PS. "
+    "Return ONLY JSON: {\"subject\": str, \"body\": str, \"talking_points\": [str, str, str], \"ps\": str}"
+)
+
+
+class OutreachEmailRequest(BaseModel):
+    prospect_id: str
+
+
+@api.post("/prospects/{pid}/email-draft")
+async def prospect_email_draft(pid: str, _: str = Depends(require_admin)):
+    """Generate a tailored solicitation email package for a saved prospect."""
+    p = await db.prospects.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Prospect not found")
+    session = str(uuid.uuid4())
+    chat = _llm(session, OUTREACH_EMAIL_SYS, "anthropic")
+    user_msg = (
+        f"Prospect: {p['name']} · {p['title']} at {p['company']} ({p['city']}, {p['company_size']} FTE)\n"
+        f"Industry: {p['industry']}\n"
+        f"Pain point: {p['pain_point']}\n"
+        f"Suggested hook: {p.get('hook') or '—'}\n"
+        f"Recommended JADE agent: {p.get('recommended_agent') or 'qualify_lead'}\n\n"
+        f"Write the package."
+    )
+    raw = []
+    async for ev in chat.stream_message(UserMessage(text=user_msg)):
+        if isinstance(ev, TextDelta):
+            raw.append(ev.content)
+        elif isinstance(ev, StreamDone):
+            break
+    try:
+        pkg = json.loads(_strip_json("".join(raw)))
+    except Exception as e:
+        raise HTTPException(500, f"LLM JSON parse failed: {e}")
+    await _log_run("draft_outreach", "anthropic", DEFAULT_MODELS["anthropic"],
+                   f"[prospect-email · {p['company']}]", pkg.get("subject", "")[:200])
+    pkg["to"] = p["email"]
+    pkg["prospect_id"] = pid
+    return pkg
+
+
+# ============================================================
+# PROMO REEL · Sora 2 generated promotional video, served publicly
+# ============================================================
+PROMO_VIDEO_PATH = Path("/app/static/jadeos_promo.mp4")
+PROMO_META_PATH = Path("/app/static/jadeos_promo.json")
+
+
+@api.get("/promo/video")
+async def promo_video():
+    """Stream the JADE OS promotional reel (Sora 2 generated). Public — for socials/embeds."""
+    if not PROMO_VIDEO_PATH.exists():
+        raise HTTPException(404, "promo video not yet generated — run scripts/generate_promo_video.py")
+    return FileResponse(
+        str(PROMO_VIDEO_PATH),
+        media_type="video/mp4",
+        filename="jadeos_promo.mp4",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@api.get("/promo/meta")
+async def promo_meta():
+    """Metadata sidecar for the promo reel (prompt, size, duration, file size)."""
+    if not PROMO_META_PATH.exists():
+        return {"available": False}
+    try:
+        return {"available": True, **json.loads(PROMO_META_PATH.read_text())}
+    except Exception:
+        return {"available": PROMO_VIDEO_PATH.exists()}
 
 
 # -------------------- Startup: seed admin --------------------

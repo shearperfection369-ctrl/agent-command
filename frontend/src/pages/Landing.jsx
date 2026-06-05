@@ -87,9 +87,28 @@ export default function Landing() {
       <section className="relative overflow-hidden bg-console">
         <div className="absolute inset-0 grid-bg pointer-events-none" />
         <div className="absolute inset-0 scanlines pointer-events-none" />
-        <div className="absolute top-0 bottom-0 right-0 w-[42%] hidden lg:block opacity-95"
-          style={{ background: "linear-gradient(110deg, transparent 0%, rgba(204,255,0,0.55) 35%, #b5e600 100%)" }} />
-        <div className="absolute top-0 bottom-0 right-0 w-[42%] hidden lg:block grid-bg-tight pointer-events-none" />
+        {/* Right gutter — JADE OS quanta device w/ holographic console */}
+        <div className="absolute top-0 bottom-0 right-0 w-[46%] hidden lg:block pointer-events-none overflow-hidden">
+          <img
+            src="https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/7atwkaoe_quanta-1779558560741.png"
+            alt="JADE OS · quanta device projecting a holographic operator console"
+            data-testid="hero-quanta-image"
+            className="absolute inset-0 w-full h-full object-cover object-center"
+            loading="eager"
+            decoding="async"
+          />
+          {/* Console-black bleed on the inner edge so it dissolves into the left content */}
+          <div
+            className="absolute inset-y-0 left-0 w-[26%]"
+            style={{ background: "linear-gradient(90deg, #04050d 0%, rgba(4,5,13,0.85) 35%, transparent 100%)" }}
+          />
+          {/* Subtle jade-lime corner glow to match brand grammar */}
+          <div
+            className="absolute -bottom-24 -right-24 w-[420px] h-[420px] rounded-full opacity-30"
+            style={{ background: "radial-gradient(closest-side, #ccff00aa, transparent 70%)" }}
+          />
+        </div>
+        <div className="absolute top-0 bottom-0 right-0 w-[46%] hidden lg:block grid-bg-tight pointer-events-none mix-blend-overlay opacity-30" />
 
         <div className="relative max-w-[1400px] mx-auto px-6 lg:px-10 pt-20 lg:pt-28 pb-24 lg:pb-32">
           <div className="bracket-frame p-6 lg:p-10 max-w-3xl reveal">

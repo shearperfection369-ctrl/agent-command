@@ -59,6 +59,7 @@ export default function Dashboard() {
     { id: "orgs", label: "ORGS", c: "#7c5cff", n: orgs.length },
     { id: "hooks", label: "WEBHOOKS", c: "#ff3b8a", n: hooks.length },
     { id: "kb", label: "KNOWLEDGE BASE", c: "#ccff00", n: kb.length },
+    { id: "promo", label: "PROMO REEL", c: "#ff3b8a", n: "" },
     { id: "selftest", label: "SELF-TEST", c: "#00ffff", n: "" },
   ];
 
@@ -109,6 +110,7 @@ export default function Dashboard() {
           {tab === "orgs" && <OrgsTable orgs={orgs} />}
           {tab === "hooks" && <WebhooksPanel hooks={hooks} reload={load} />}
           {tab === "kb" && <KbPanel kb={kb} reload={load} />}
+          {tab === "promo" && <PromoReelPanel />}
           {tab === "selftest" && <SelfTestPanel />}
         </div>
       </section>
@@ -638,6 +640,173 @@ function SummaryStat({ k, v, c }) {
     >
       <div className="mono-label text-[10px]" style={{ color: c }}>{k}</div>
       <div className="font-display font-black text-2xl tracking-tighter mt-1" style={{ color: c }}>{v}</div>
+    </div>
+  );
+}
+
+// Used by LighthousePanel (was missing — caused ReferenceError)
+function Stat({ k, v, c }) {
+  return (
+    <div className="border border-white/10 px-4 py-3" style={{ borderColor: `${c}33`, background: `${c}08` }}>
+      <div className="mono-label text-[10px]" style={{ color: c }}>{k}</div>
+      <div className="font-display font-black text-3xl tracking-tighter mt-1" style={{ color: c }}>{v}</div>
+    </div>
+  );
+}
+
+
+
+// ============================================================
+// PROMO REEL PANEL — preview/share/download the Sora 2-generated
+// promotional video for socials.
+// ============================================================
+function PromoReelPanel() {
+  const [meta, setMeta] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const apiBase = process.env.REACT_APP_BACKEND_URL || "";
+  const videoUrl = `${apiBase}/api/promo/video`;
+
+  useEffect(() => {
+    let alive = true;
+    api.get("/promo/meta")
+      .then((r) => { if (alive) setMeta(r.data); })
+      .catch(() => { if (alive) setMeta({ available: false }); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const copy = (text, label) => {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`${label} copied to clipboard`),
+      () => toast.error("Clipboard blocked")
+    );
+  };
+
+  const captionDraft = `Stop drowning in ops work.
+
+JADE OS is the AI-agent platform for Minneapolis operators — 6 industry-trained agents that triage support, qualify leads, extract docs, and run multi-step playbooks while you sleep.
+
+· Freight · Healthcare · SaaS · Manufacturing · Legal · E-commerce · Real-Estate · Insurance ·
+
+Built by an operator, for operators.
+
+→ onejades.com
+
+#AI #Automation #Minneapolis #SaaS #Operations #Logistics #Healthcare`;
+
+  if (loading) {
+    return (
+      <div className="deck-card p-12 text-center font-mono-tech text-xs text-[#ccff00]" data-testid="promo-loading">
+        // loading promo reel…
+      </div>
+    );
+  }
+
+  if (!meta?.available) {
+    return (
+      <div className="deck-card p-10 relative" data-testid="promo-empty">
+        <CornerBrackets />
+        <div className="mono-label text-[#ff3b8a] mb-3">PROMO REEL · NOT GENERATED</div>
+        <p className="text-white/65 text-sm leading-relaxed max-w-2xl">
+          The promotional video hasn't been generated yet. Run{" "}
+          <code className="font-mono-tech text-[#ccff00]">python backend/scripts/generate_promo_video.py</code>{" "}
+          from the repo root to produce <code className="font-mono-tech text-[#00ffff]">jadeos_promo.mp4</code> (Sora 2 · 12s · 1280×720). Takes ~3 minutes.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-testid="promo-panel">
+      <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6">
+        {/* Video preview */}
+        <div className="deck-card relative overflow-hidden" data-testid="promo-player">
+          <CornerBrackets />
+          <div className="p-5 border-b border-white/10 flex items-center justify-between">
+            <div className="mono-label text-[#ff3b8a]">PROMOTIONAL REEL · JADE OS · {meta.duration_s}s · {meta.size}</div>
+            <span className="font-mono-tech text-[10px] text-white/45">{meta.file_mb} MB</span>
+          </div>
+          <video
+            data-testid="promo-video-el"
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full block bg-black"
+            src={videoUrl}
+          >
+            Sorry, your browser doesn't support embedded video.
+          </video>
+        </div>
+
+        {/* Share / actions */}
+        <div className="space-y-4">
+          <div className="deck-card p-6 relative" data-testid="promo-share">
+            <CornerBrackets />
+            <div className="mono-label text-[#00ffff] mb-4">SHARE · ONE-CLICK ACTIONS</div>
+            <div className="space-y-3">
+              <a
+                data-testid="promo-download-btn"
+                href={videoUrl}
+                download="jadeos_promo.mp4"
+                className="btn-jade w-full inline-flex items-center justify-center gap-2"
+              >
+                <Database size={14} weight="bold" /> DOWNLOAD MP4
+              </a>
+              <button
+                data-testid="promo-copy-url-btn"
+                onClick={() => copy(videoUrl, "Public video URL")}
+                className="btn-ghost w-full inline-flex items-center justify-center gap-2"
+              >
+                <Webhooks size={14} weight="bold" /> COPY PUBLIC URL
+              </button>
+              <button
+                data-testid="promo-copy-caption-btn"
+                onClick={() => copy(captionDraft, "Caption")}
+                className="btn-ghost w-full inline-flex items-center justify-center gap-2"
+              >
+                <ChartBar size={14} weight="bold" /> COPY SOCIAL CAPTION
+              </button>
+            </div>
+            <div className="mt-5 pt-5 border-t border-white/10">
+              <div className="mono-label text-[10px] text-white/40 mb-2">PUBLIC URL</div>
+              <div
+                className="font-mono-tech text-[10px] text-white/65 break-all leading-relaxed bg-black/40 p-3 border border-white/5"
+                data-testid="promo-url"
+              >
+                {videoUrl}
+              </div>
+            </div>
+          </div>
+
+          <div className="deck-card p-6 relative">
+            <CornerBrackets />
+            <div className="mono-label text-[#7c5cff] mb-3">PLATFORM SUGGESTIONS</div>
+            <ul className="space-y-2 text-xs text-white/70 font-mono-tech leading-relaxed">
+              <li><span className="text-[#ccff00]">▸</span> X / Twitter — works native, autoplay on feed</li>
+              <li><span className="text-[#ccff00]">▸</span> LinkedIn — upload directly, this 16:9 displays full</li>
+              <li><span className="text-[#ccff00]">▸</span> YouTube Shorts — re-crop to 9:16 in CapCut first</li>
+              <li><span className="text-[#ccff00]">▸</span> Instagram / TikTok — same 9:16 crop, add caption overlay</li>
+              <li><span className="text-[#ccff00]">▸</span> Email signature — link the public URL</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Prompt reference */}
+      <div className="deck-card p-6 relative" data-testid="promo-prompt">
+        <CornerBrackets />
+        <div className="flex items-center justify-between mb-4">
+          <div className="mono-label text-white/50">SORA 2 PROMPT · {meta.model}</div>
+          <div className="flex items-center gap-3 font-mono-tech text-[10px] text-white/45">
+            <span>RENDERED IN {meta.elapsed_s}s</span>
+            <span className="text-white/25">·</span>
+            <span>{new Date(meta.finished).toLocaleString()}</span>
+          </div>
+        </div>
+        <p className="font-mono-tech text-[11px] text-white/65 leading-relaxed whitespace-pre-wrap">
+          {meta.prompt}
+        </p>
+      </div>
     </div>
   );
 }
