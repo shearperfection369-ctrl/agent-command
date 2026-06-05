@@ -1,5 +1,5 @@
 /**
- * MoodPicker — floating bottom-right widget that swaps JADE OS color/mood.
+ * MoodPicker — floating bottom-left widget that swaps JADE OS color/mood.
  * Persists to localStorage and applies via [data-theme] attribute on <html>.
  */
 import { useEffect, useState } from "react";
