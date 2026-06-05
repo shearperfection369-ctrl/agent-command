@@ -671,17 +671,19 @@ function Stat({ k, v, c }) {
 function PromoReelPanel() {
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState(null); // null = newest, 1, or 2
   const apiBase = process.env.REACT_APP_BACKEND_URL || "";
-  const videoUrl = `${apiBase}/api/promo/video`;
+  const qs = version ? `?v=${version}` : "";
+  const videoUrl = `${apiBase}/api/promo/video${qs}`;
 
   useEffect(() => {
-    let alive = true;
-    api.get("/promo/meta")
-      .then((r) => { if (alive) setMeta(r.data); })
-      .catch(() => { if (alive) setMeta({ available: false }); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+    setLoading(true);
+    const params = version ? { v: version } : {};
+    api.get("/promo/meta", { params })
+      .then((r) => setMeta(r.data))
+      .catch(() => setMeta({ available: false }))
+      .finally(() => setLoading(false));
+  }, [version]);
 
   const copy = (text, label) => {
     navigator.clipboard.writeText(text).then(
@@ -730,12 +732,49 @@ Built by an operator, for operators.
         {/* Video preview */}
         <div className="deck-card relative overflow-hidden" data-testid="promo-player">
           <CornerBrackets />
-          <div className="p-5 border-b border-white/10 flex items-center justify-between">
-            <div className="mono-label text-[#ff3b8a]">PROMOTIONAL REEL · JADE OS · {meta.duration_s}s · {meta.size}</div>
-            <span className="font-mono-tech text-[10px] text-white/45">{meta.file_mb} MB</span>
+          <div className="p-5 border-b border-white/10 flex items-center justify-between flex-wrap gap-3">
+            <div className="mono-label text-[#ff3b8a]">
+              PROMOTIONAL REEL · JADE OS · {meta.duration_s}s · {meta.size}
+              {meta.model && <span className="text-white/40"> · {meta.model}</span>}
+            </div>
+            <div className="flex items-center gap-3">
+              {meta.versions_available && (meta.versions_available.v1 || meta.versions_available.v2) && (
+                <div className="flex items-center gap-1" data-testid="promo-version-toggle">
+                  <span className="mono-label text-[10px] text-white/35 mr-1">VERSION</span>
+                  {meta.versions_available.v2 && (
+                    <button
+                      data-testid="promo-version-v2"
+                      onClick={() => setVersion(2)}
+                      className="px-2 py-1 mono-label text-[10px] border"
+                      style={{
+                        borderColor: (version === 2 || (version == null && meta.versions_available.v2)) ? "#ccff00" : "rgba(255,255,255,0.12)",
+                        color: (version === 2 || (version == null && meta.versions_available.v2)) ? "#ccff00" : "rgba(255,255,255,0.55)",
+                      }}
+                    >
+                      V2 · PRO
+                    </button>
+                  )}
+                  {meta.versions_available.v1 && (
+                    <button
+                      data-testid="promo-version-v1"
+                      onClick={() => setVersion(1)}
+                      className="px-2 py-1 mono-label text-[10px] border"
+                      style={{
+                        borderColor: version === 1 ? "#00ffff" : "rgba(255,255,255,0.12)",
+                        color: version === 1 ? "#00ffff" : "rgba(255,255,255,0.55)",
+                      }}
+                    >
+                      V1
+                    </button>
+                  )}
+                </div>
+              )}
+              <span className="font-mono-tech text-[10px] text-white/45">{meta.file_mb} MB</span>
+            </div>
           </div>
           <video
             data-testid="promo-video-el"
+            key={videoUrl}
             controls
             playsInline
             preload="metadata"

@@ -2475,33 +2475,63 @@ async def prospect_email_draft(pid: str, _: str = Depends(require_admin)):
 
 # ============================================================
 # PROMO REEL · Sora 2 generated promotional video, served publicly
+# v2 (sora-2-pro, longer, real ops use-case scenes) preferred when present.
 # ============================================================
 PROMO_VIDEO_PATH = Path("/app/static/jadeos_promo.mp4")
 PROMO_META_PATH = Path("/app/static/jadeos_promo.json")
+PROMO_V2_PATH = Path("/app/static/jadeos_promo_v2.mp4")
+PROMO_V2_META = Path("/app/static/jadeos_promo_v2.json")
+
+
+def _active_promo():
+    if PROMO_V2_PATH.exists() and PROMO_V2_META.exists():
+        return PROMO_V2_PATH, PROMO_V2_META
+    return PROMO_VIDEO_PATH, PROMO_META_PATH
 
 
 @api.get("/promo/video")
-async def promo_video():
-    """Stream the JADE OS promotional reel (Sora 2 generated). Public — for socials/embeds."""
-    if not PROMO_VIDEO_PATH.exists():
-        raise HTTPException(404, "promo video not yet generated — run scripts/generate_promo_video.py")
+async def promo_video(v: Optional[int] = None):
+    """Stream the JADE OS promotional reel. `?v=1` or `?v=2` pins a version; omit for newest."""
+    if v == 1:
+        path = PROMO_VIDEO_PATH
+    elif v == 2:
+        path = PROMO_V2_PATH
+    else:
+        path, _ = _active_promo()
+    if not path.exists():
+        raise HTTPException(404, "promo video not yet generated")
     return FileResponse(
-        str(PROMO_VIDEO_PATH),
+        str(path),
         media_type="video/mp4",
-        filename="jadeos_promo.mp4",
+        filename=path.name,
         headers={"Cache-Control": "public, max-age=3600"},
     )
 
 
 @api.get("/promo/meta")
-async def promo_meta():
-    """Metadata sidecar for the promo reel (prompt, size, duration, file size)."""
-    if not PROMO_META_PATH.exists():
-        return {"available": False}
+async def promo_meta(v: Optional[int] = None):
+    """Metadata sidecar. Same version-pinning semantics as /promo/video."""
+    if v == 1:
+        meta_path, vid_path = PROMO_META_PATH, PROMO_VIDEO_PATH
+    elif v == 2:
+        meta_path, vid_path = PROMO_V2_META, PROMO_V2_PATH
+    else:
+        vid_path, meta_path = _active_promo()
+    if not meta_path.exists():
+        return {"available": False, "versions_available": {
+            "v1": PROMO_VIDEO_PATH.exists(),
+            "v2": PROMO_V2_PATH.exists(),
+        }}
     try:
-        return {"available": True, **json.loads(PROMO_META_PATH.read_text())}
+        data = json.loads(meta_path.read_text())
     except Exception:
-        return {"available": PROMO_VIDEO_PATH.exists()}
+        data = {}
+    data["available"] = vid_path.exists()
+    data["versions_available"] = {
+        "v1": PROMO_VIDEO_PATH.exists(),
+        "v2": PROMO_V2_PATH.exists(),
+    }
+    return data
 
 
 # ============================================================
