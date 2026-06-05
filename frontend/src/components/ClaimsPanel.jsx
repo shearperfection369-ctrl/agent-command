@@ -86,7 +86,11 @@ function DraftWizard({ threads, onCreated }) {
                     <label className="mono-label text-[10px] text-white/55">MEMORY THREAD · OPTIONAL</label>
                     <select value={threadId} onChange={(e) => setThreadId(e.target.value)} className="input-tech text-xs w-full mt-1" data-testid="claim-draft-thread">
                         <option value="">— none — paste context below instead</option>
-                        {threads.map((t) => <option key={t.id} value={t.id}>{t.thread_type.toUpperCase()} · {t.thread_key} · {t.title}</option>)}
+                        {threads.map((t) => (
+                            <option key={t.id} value={t.id}>
+                                {`${t.thread_type.toUpperCase()} · ${t.thread_key} · ${t.title || ""}`}
+                            </option>
+                        ))}
                     </select>
                 </div>
                 <div className="lg:col-span-3">
