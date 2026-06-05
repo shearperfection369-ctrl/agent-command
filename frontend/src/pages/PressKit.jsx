@@ -4,6 +4,7 @@ import { CornerBrackets } from "../components/Brackets";
 import { toast } from "sonner";
 
 const ASSETS = {
+  workspace: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/cghzdrkp_jade%20ultra%20image.png",
   quanta: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/7atwkaoe_quanta-1779558560741.png",
   banner: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/fahm9un7_banner-970x260.png",
   voice: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/jlqa2gtk_09-jade-survival-codex.mp3",
@@ -69,7 +70,8 @@ export default function PressKit() {
           Logos, hardware, banners.
         </h2>
         <div className="grid sm:grid-cols-2 gap-6">
-          <AssetTile testid="asset-quanta" name="Quanta Keychain" desc="Hardware companion · lime-LED edges · holographic projection · the JADE OS hero device" url={ASSETS.quanta} />
+          <AssetTile testid="asset-workspace" name="JADE OS Workstation" desc="Hero product shot · laptop + monitor running the console · staged photography" url={ASSETS.workspace} />
+          <AssetTile testid="asset-quanta" name="Quanta Keychain" desc="Hardware companion · lime-LED edges · holographic projection" url={ASSETS.quanta} />
           <AssetTile testid="asset-banner" name="Web Banner · 970×260" desc="Leaderboard ad unit · cross-platform · ready for socials + display" url={ASSETS.banner} />
         </div>
       </section>

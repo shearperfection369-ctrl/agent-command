@@ -338,6 +338,50 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ============== WORKSPACE · SUBTLE PRODUCT HERO ============== */}
+      <section className="relative bg-console py-20 lg:py-28 px-6 lg:px-10 border-t border-white/5" data-testid="landing-workspace">
+        <div className="max-w-[1400px] mx-auto">
+          <SectionLabel idx={5} color="#7c5cff">IN THE WILD</SectionLabel>
+          <div className="grid lg:grid-cols-[1fr_1.5fr] gap-10 lg:gap-14 items-center">
+            <div>
+              <h2 className="font-display font-bold text-white text-3xl sm:text-4xl tracking-tight leading-tight">
+                The console, <span className="accent-jade">at your desk.</span>
+              </h2>
+              <p className="text-white/55 mt-4 leading-relaxed max-w-md">
+                JADE OS lives where your operators work — laptop, monitor, command line.
+                No app to install, no IT request, no waiting in line. Sign in. Run the agent. Ship.
+              </p>
+              <div className="mt-6 font-mono-tech text-[10px] text-white/35 leading-relaxed border-l-2 border-[#ccff00]/30 pl-4">
+                // a JADE OS workstation · staged for product photography ·<br />
+                // onejades.com · v1.2 build
+              </div>
+            </div>
+            <div className="relative" data-testid="landing-workspace-frame">
+              {/* image with very subtle bracket overlay — let the product shot breathe */}
+              <img
+                src="https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/cghzdrkp_jade%20ultra%20image.png"
+                alt="JADE OS workstation — laptop and curved monitor displaying the console interface"
+                loading="lazy"
+                decoding="async"
+                data-testid="landing-workspace-image"
+                className="block w-full h-auto"
+                style={{ borderRadius: 0 }}
+              />
+              {/* faint console-black vignette top to dissolve hard image edges */}
+              <div
+                className="absolute inset-x-0 top-0 h-12 pointer-events-none"
+                style={{ background: "linear-gradient(180deg, rgba(4,5,13,0.45) 0%, transparent 100%)" }}
+              />
+              {/* corner brackets - very faint, matching brand grammar */}
+              <span className="absolute top-2 left-2 w-5 h-5 border-l border-t border-[#ccff00]/40 pointer-events-none" />
+              <span className="absolute top-2 right-2 w-5 h-5 border-r border-t border-[#ccff00]/40 pointer-events-none" />
+              <span className="absolute bottom-2 left-2 w-5 h-5 border-l border-b border-[#ccff00]/40 pointer-events-none" />
+              <span className="absolute bottom-2 right-2 w-5 h-5 border-r border-b border-[#ccff00]/40 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ============== BOOK A DEMO FORM ============== */}
       <section id="book" className="relative bg-console-2 py-24 lg:py-32 px-6 lg:px-10 border-t border-white/5">
         <div className="max-w-[1400px] mx-auto grid lg:grid-cols-5 gap-12">
