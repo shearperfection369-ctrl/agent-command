@@ -16,6 +16,8 @@ import PartnerPackagePanel from "../components/PartnerPackagePanel";
 import CompetitiveEdgePanel from "../components/CompetitiveEdgePanel";
 import OperationsPanel from "../components/OperationsPanel";
 import IntegrationsScaffoldPanel from "../components/IntegrationsScaffoldPanel";
+import MemoryThreadsPanel from "../components/MemoryThreadsPanel";
+import ClaimsPanel from "../components/ClaimsPanel";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -65,6 +67,8 @@ export default function Dashboard() {
 
   const TABS = [
     { id: "health", label: "HEALTH · DIAGNOSTICS", c: "#ff3b8a", n: "" },
+    { id: "memory", label: "MEMORY · THREADS", c: "#7c5cff", n: "" },
+    { id: "claims", label: "CLAIMS · QUEUE", c: "#ff3b8a", n: "" },
     { id: "integrations", label: "INTEGRATIONS · WIRED", c: "#00ffff", n: "" },
     { id: "ops", label: "OPERATIONS · LIGHTHOUSE", c: "#7c5cff", n: "" },
     { id: "edge", label: "COMPETITIVE EDGE", c: "#ffce4f", n: "" },
@@ -125,6 +129,8 @@ export default function Dashboard() {
       <section className="px-6 lg:px-10 py-10">
         <div className="max-w-[1400px] mx-auto">
           {tab === "health" && <HealthPanel />}
+          {tab === "memory" && <MemoryThreadsPanel />}
+          {tab === "claims" && <ClaimsPanel />}
           {tab === "integrations" && <IntegrationsScaffoldPanel />}
           {tab === "ops" && <OperationsPanel />}
           {tab === "edge" && <CompetitiveEdgePanel />}

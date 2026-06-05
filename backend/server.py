@@ -266,6 +266,10 @@ class ChatRequest(BaseModel):
     industry: Industry = "general"
     provider: Literal["anthropic", "openai"] = "anthropic"
     model: Optional[str] = None
+    # Optional memory binding: when set, the agent recalls the thread's
+    # facts ledger + recent turns AND auto-appends both sides of the exchange.
+    memory_thread_type: Optional[Literal["load", "customer", "issue"]] = None
+    memory_thread_key: Optional[str] = None
 
 
 class ExtractRequest(BaseModel):
@@ -1186,7 +1190,28 @@ async def lighthouse_stats():
 # -------------------- Routes: agent demo --------------------
 @api.post("/agent/chat")
 async def agent_chat(body: ChatRequest):
-    sys_msg = _system_for(body.industry, "be a knowledgeable Tier-1 / ops co-pilot — answer questions, route issues, escalate when needed")
+    base_role = "be a knowledgeable Tier-1 / ops co-pilot — answer questions, route issues, escalate when needed"
+    sys_msg = _system_for(body.industry, base_role)
+
+    # Memory binding: auto-recall + auto-append. Optional and additive — chat
+    # works fine without it.
+    bound_thread = None
+    if body.memory_thread_type and body.memory_thread_key:
+        try:
+            import memory_workflow as _mem
+            bound_thread = await _mem.get_or_create_thread(
+                db, body.memory_thread_type, body.memory_thread_key.strip(),
+                industry=body.industry,
+            )
+            recall = await _mem.build_recall_context(db, bound_thread["id"])
+            if recall:
+                sys_msg += f"\n\n----\nWORKFLOW MEMORY — use these as ground truth:\n{recall}"
+            await _mem.append_turn(db, bound_thread["id"], "user", body.message,
+                                   metadata={"session_id": body.session_id})
+        except Exception as e:
+            log.warning("memory · recall/append failed · %s", e)
+            bound_thread = None
+
     chat = _llm(body.session_id, sys_msg, body.provider, body.model)
     user_msg = UserMessage(text=body.message)
     model_used = body.model or DEFAULT_MODELS[body.provider]
@@ -1201,7 +1226,22 @@ async def agent_chat(body: ChatRequest):
                 elif isinstance(ev, StreamDone):
                     break
             yield f"data: {json.dumps({'done': True})}\n\n"
-            await _log_run("chat", body.provider, model_used, f"[{body.industry}] {body.message}", "".join(full))
+            full_text = "".join(full)
+            await _log_run("chat", body.provider, model_used, f"[{body.industry}] {body.message}", full_text)
+            # Persist assistant reply into the memory thread + auto-distill check
+            if bound_thread is not None:
+                try:
+                    import memory_workflow as _mem
+                    await _mem.append_turn(db, bound_thread["id"], "assistant", full_text,
+                                           metadata={"session_id": body.session_id})
+                    fresh = await db.memory_threads.find_one({"id": bound_thread["id"]}, {"_id": 0})
+                    if fresh and (fresh.get("turn_count", 0) - fresh.get("last_distilled_at_turn", 0)) >= _mem.DISTILL_EVERY_TURNS:
+                        try:
+                            await _mem.distill_thread(db, bound_thread["id"], _llm)
+                        except Exception as de:
+                            log.warning("memory · distill after chat failed · %s", de)
+                except Exception as e:
+                    log.warning("memory · assistant append failed · %s", e)
         except Exception as e:
             log.exception("chat stream error")
             info = classify_llm_error(e)
@@ -2551,7 +2591,7 @@ class WebhookConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     url: str
-    kind: Literal["slack", "crm", "generic"] = "slack"
+    kind: Literal["slack", "crm", "generic", "claims"] = "slack"
     active: bool = True
     created_at: str = Field(default_factory=_utcnow_iso)
 
@@ -2559,7 +2599,7 @@ class WebhookConfig(BaseModel):
 class WebhookConfigCreate(BaseModel):
     name: str
     url: str
-    kind: Literal["slack", "crm", "generic"] = "slack"
+    kind: Literal["slack", "crm", "generic", "claims"] = "slack"
 
 
 @api.post("/webhooks", response_model=WebhookConfig)
@@ -4154,6 +4194,341 @@ async def resend_webhook(request: Request):
         "raw": evt,
         "created_at": _utcnow_iso(),
     })
+    return {"ok": True}
+
+
+# ============================================================
+# WORKFLOW MEMORY · per-topic agent memory threads
+# ============================================================
+import memory_workflow as mem_mod
+import claims as claims_mod
+
+
+@api.post("/memory/threads")
+async def memory_threads_create(body: mem_mod.ThreadCreate, _: str = Depends(require_admin)):
+    """Create or fetch a memory thread for (thread_type, thread_key). Idempotent."""
+    if body.thread_type not in ("load", "customer", "issue"):
+        raise HTTPException(400, "thread_type must be one of: load, customer, issue")
+    if not body.thread_key.strip():
+        raise HTTPException(400, "thread_key cannot be empty")
+    t = await mem_mod.get_or_create_thread(
+        db, body.thread_type, body.thread_key.strip(),
+        title=body.title, industry=body.industry, tags=body.tags,
+    )
+    return t
+
+
+@api.get("/memory/threads")
+async def memory_threads_list(
+    thread_type: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+    _: str = Depends(require_admin),
+):
+    q: Dict[str, Any] = {}
+    if thread_type:
+        q["thread_type"] = thread_type
+    if status:
+        q["status"] = status
+    docs = await db.memory_threads.find(q, {"_id": 0}).sort("updated_at", -1).limit(limit).to_list(limit)
+    return {"threads": docs, "count": len(docs)}
+
+
+@api.get("/memory/threads/{thread_id}")
+async def memory_thread_detail(thread_id: str, _: str = Depends(require_admin)):
+    t = await db.memory_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Thread not found")
+    turns = await mem_mod.get_all_turns(db, thread_id)
+    return {"thread": t, "turns": turns}
+
+
+@api.post("/memory/threads/{thread_id}/turns")
+async def memory_thread_append(thread_id: str, body: mem_mod.TurnAppend, _: str = Depends(require_admin)):
+    t = await db.memory_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Thread not found")
+    turn = await mem_mod.append_turn(db, thread_id, body.role, body.content, body.metadata)
+    # Auto-distill every N turns
+    new_count = (t.get("turn_count", 0) + 1)
+    if new_count - t.get("last_distilled_at_turn", 0) >= mem_mod.DISTILL_EVERY_TURNS:
+        try:
+            await mem_mod.distill_thread(db, thread_id, _llm)
+        except Exception as e:
+            log.warning("memory · auto-distill failed for %s · %s", thread_id, e)
+    return turn
+
+
+@api.post("/memory/threads/{thread_id}/distill")
+async def memory_thread_distill(thread_id: str, _: str = Depends(require_admin)):
+    """Force a distillation pass — useful at workflow close."""
+    try:
+        result = await mem_mod.distill_thread(db, thread_id, _llm)
+        return result
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        info = classify_llm_error(e)
+        raise HTTPException(info.get("http_status", 500), info.get("message", "distill failed"))
+
+
+@api.get("/memory/threads/{thread_id}/recall")
+async def memory_thread_recall(thread_id: str, _: str = Depends(require_admin)):
+    """Return the compact recall block (used internally by the chat agent)."""
+    block = await mem_mod.build_recall_context(db, thread_id)
+    return {"thread_id": thread_id, "recall_block": block}
+
+
+@api.patch("/memory/threads/{thread_id}")
+async def memory_thread_update(thread_id: str, status: Optional[str] = None, _: str = Depends(require_admin)):
+    if status and status not in ("active", "closed", "archived"):
+        raise HTTPException(400, "invalid status")
+    update: Dict[str, Any] = {"updated_at": _utcnow_iso()}
+    if status:
+        update["status"] = status
+    res = await db.memory_threads.update_one({"id": thread_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Thread not found")
+    return await db.memory_threads.find_one({"id": thread_id}, {"_id": 0})
+
+
+# ============================================================
+# CLAIMS · cargo / detention / overage_shortage
+# ============================================================
+
+async def _dispatch_claim_to_webhooks(claim: Dict) -> Dict:
+    """Deliver claim payload to every active webhook with kind='claims'."""
+    import httpx
+    hooks = await db.webhooks.find({"kind": "claims", "active": True}, {"_id": 0}).to_list(20)
+    if not hooks:
+        return {"delivered_count": 0, "results": [], "note": "no claims webhook configured"}
+    payload = claims_mod.to_webhook_payload(claim)
+    results: List[Dict] = []
+    delivered_count = 0
+    async with httpx.AsyncClient(timeout=10.0) as cx:
+        for h in hooks:
+            ok = False
+            err = None
+            try:
+                r = await cx.post(h["url"], json=payload)
+                ok = 200 <= r.status_code < 300
+                if not ok:
+                    err = f"HTTP {r.status_code}: {r.text[:200]}"
+            except Exception as e:
+                err = str(e)
+            results.append({"webhook_id": h["id"], "url": h["url"], "ok": ok, "error": err})
+            if ok:
+                delivered_count += 1
+            await db.webhook_deliveries.insert_one({
+                "id": str(uuid.uuid4()),
+                "webhook_id": h["id"],
+                "title": f"CLAIM · {claim['claim_number']}",
+                "body_preview": claim.get("title", "")[:300],
+                "delivered": ok,
+                "error": err,
+                "created_at": _utcnow_iso(),
+            })
+    return {"delivered_count": delivered_count, "results": results}
+
+
+@api.post("/claims/draft")
+async def claims_draft(body: claims_mod.ClaimDraftRequest, _: str = Depends(require_admin)):
+    """LLM-draft a claim from a memory thread and/or freeform context.
+
+    Returns the unsaved draft so the operator can review before persisting.
+    Use /claims (POST) to actually create the claim record.
+    """
+    try:
+        extras = {}
+        if body.load_id:
+            extras["load_id"] = body.load_id
+        if body.bol_number:
+            extras["bol_number"] = body.bol_number
+        if body.claim_amount_usd is not None:
+            extras["claim_amount_usd_hint"] = body.claim_amount_usd
+        if body.parties:
+            extras["parties"] = [p.model_dump() for p in body.parties]
+
+        draft = await claims_mod.draft_claim(
+            db,
+            kind=body.kind,
+            memory_thread_id=body.memory_thread_id,
+            context_text=body.context_text,
+            provider=body.provider,
+            llm_chat_factory=_llm,
+            memory_recall_fn=mem_mod.build_recall_context,
+            extra_hints=extras or None,
+        )
+        # Suggest auto-file decision based on amount
+        amount = body.claim_amount_usd if body.claim_amount_usd is not None else draft.get("claim_amount_usd", 0.0)
+        draft["claim_amount_usd"] = amount
+        draft["would_auto_file"] = claims_mod.should_auto_file(amount)
+        draft["auto_file_limit_usd"] = claims_mod.AUTO_FILE_LIMIT_USD
+        return draft
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        info = classify_llm_error(e)
+        raise HTTPException(info.get("http_status", 500), info.get("message", "draft failed"))
+
+
+@api.post("/claims")
+async def claims_create(body: Dict[str, Any], _: str = Depends(require_admin)):
+    """Persist a claim. If `auto_file=true` and amount <= threshold, immediately
+    files it via webhooks. Otherwise stages it as `ready_for_review`."""
+    kind = body.get("kind")
+    if kind not in ("cargo", "detention", "overage_shortage"):
+        raise HTTPException(400, "kind must be cargo, detention, or overage_shortage")
+    if not body.get("title"):
+        raise HTTPException(400, "title is required")
+
+    claim = claims_mod.Claim(
+        claim_number=body.get("claim_number") or claims_mod.make_claim_number(kind),
+        kind=kind,
+        memory_thread_id=body.get("memory_thread_id"),
+        load_id=body.get("load_id"),
+        bol_number=body.get("bol_number"),
+        pickup_date=body.get("pickup_date"),
+        delivery_date=body.get("delivery_date"),
+        origin=body.get("origin"),
+        destination=body.get("destination"),
+        parties=[claims_mod.ClaimPartyInfo(**p) for p in (body.get("parties") or [])],
+        claim_amount_usd=float(body.get("claim_amount_usd") or 0),
+        title=body["title"],
+        summary=body.get("summary", ""),
+        facts=list(body.get("facts") or []),
+        evidence_uris=list(body.get("evidence_uris") or []),
+        requested_remedy=body.get("requested_remedy"),
+        created_by=body.get("created_by") or "agent",
+    ).model_dump()
+
+    # Auto-file decision
+    auto_request = bool(body.get("auto_file"))
+    if auto_request and claims_mod.should_auto_file(claim["claim_amount_usd"]):
+        claim["status"] = "filed"
+        claim["auto_filed"] = True
+        claim["filed_at"] = _utcnow_iso()
+        delivery = await _dispatch_claim_to_webhooks(claim)
+        claim["delivery_attempts"] = delivery["delivered_count"]
+        claim["delivery_log"] = delivery["results"]
+    else:
+        claim["status"] = "ready_for_review"
+
+    await db.claims.insert_one(claim)
+    claim.pop("_id", None)
+
+    # Append a memory-thread "agent_action" turn so the workflow remembers it
+    if claim.get("memory_thread_id"):
+        try:
+            await mem_mod.append_turn(
+                db, claim["memory_thread_id"], "agent_action",
+                content=f"Claim {claim['claim_number']} · {claim['kind']} · ${claim['claim_amount_usd']:.2f} · status={claim['status']}",
+                metadata={"claim_id": claim["id"], "claim_kind": claim["kind"], "auto_filed": claim["auto_filed"]},
+            )
+        except Exception as e:
+            log.warning("claims · failed to append memory turn · %s", e)
+
+    return claim
+
+
+@api.get("/claims")
+async def claims_list(
+    kind: Optional[str] = None,
+    status: Optional[str] = None,
+    memory_thread_id: Optional[str] = None,
+    limit: int = 100,
+    _: str = Depends(require_admin),
+):
+    q: Dict[str, Any] = {}
+    if kind:
+        q["kind"] = kind
+    if status:
+        q["status"] = status
+    if memory_thread_id:
+        q["memory_thread_id"] = memory_thread_id
+    docs = await db.claims.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    # Summary
+    open_count = sum(1 for d in docs if d.get("status") in ("draft", "ready_for_review"))
+    filed_count = sum(1 for d in docs if d.get("status") in ("filed", "acknowledged"))
+    resolved_count = sum(1 for d in docs if d.get("status") in ("resolved", "denied", "withdrawn"))
+    total_usd = sum(float(d.get("claim_amount_usd", 0)) for d in docs)
+    return {
+        "claims": docs,
+        "count": len(docs),
+        "open": open_count,
+        "filed": filed_count,
+        "resolved": resolved_count,
+        "total_amount_usd": round(total_usd, 2),
+        "auto_file_limit_usd": claims_mod.AUTO_FILE_LIMIT_USD,
+    }
+
+
+@api.get("/claims/{claim_id}")
+async def claims_detail(claim_id: str, _: str = Depends(require_admin)):
+    c = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Claim not found")
+    return c
+
+
+@api.patch("/claims/{claim_id}")
+async def claims_update(claim_id: str, body: claims_mod.ClaimUpdate, _: str = Depends(require_admin)):
+    c = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Claim not found")
+    update: Dict[str, Any] = {"updated_at": _utcnow_iso()}
+    if body.status:
+        update["status"] = body.status
+    if body.resolution_notes is not None:
+        update["resolution_notes"] = body.resolution_notes
+    if body.claim_amount_usd is not None:
+        update["claim_amount_usd"] = float(body.claim_amount_usd)
+    if body.requested_remedy is not None:
+        update["requested_remedy"] = body.requested_remedy
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api.post("/claims/{claim_id}/file")
+async def claims_file(claim_id: str, _: str = Depends(require_admin)):
+    """Operator-approved filing: mark filed, fire webhooks."""
+    c = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Claim not found")
+    if c.get("status") == "filed":
+        return {"already_filed": True, "claim": c}
+    c["status"] = "filed"
+    c["filed_at"] = _utcnow_iso()
+    delivery = await _dispatch_claim_to_webhooks(c)
+    c["delivery_attempts"] = delivery["delivered_count"]
+    c["delivery_log"] = delivery["results"]
+    await db.claims.update_one({"id": claim_id}, {"$set": {
+        "status": "filed",
+        "filed_at": c["filed_at"],
+        "updated_at": _utcnow_iso(),
+        "delivery_attempts": c["delivery_attempts"],
+        "delivery_log": c["delivery_log"],
+    }})
+    # Memory trail
+    if c.get("memory_thread_id"):
+        try:
+            await mem_mod.append_turn(
+                db, c["memory_thread_id"], "agent_action",
+                content=f"Filed claim {c['claim_number']} · delivered to {delivery['delivered_count']} webhook(s)",
+                metadata={"claim_id": c["id"], "delivery": delivery},
+            )
+        except Exception as e:
+            log.warning("claims · file memory append failed · %s", e)
+    return {"claim": c, "delivery": delivery}
+
+
+@api.delete("/claims/{claim_id}")
+async def claims_delete(claim_id: str, _: str = Depends(require_admin)):
+    res = await db.claims.delete_one({"id": claim_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Claim not found")
     return {"ok": True}
 
 
