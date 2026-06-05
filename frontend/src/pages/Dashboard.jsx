@@ -5,7 +5,7 @@ import { api } from "../lib/api";
 import { isAuthed } from "../lib/auth";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus, Lightning, EnvelopeSimple } from "@/lib/icons";
-import { INDUSTRIES } from "../lib/industries";
+import { INDUSTRIES, SAMPLES } from "../lib/industries";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -56,6 +56,7 @@ export default function Dashboard() {
   const TABS = [
     { id: "lighthouse", label: "LIGHTHOUSE", c: "#ff3b8a", n: lighthouse.length },
     { id: "leads", label: "LEADS", c: "#ccff00", n: leads.length },
+    { id: "playground", label: "PLAYGROUND", c: "#7c5cff", n: "" },
     { id: "runs", label: "AGENT RUNS", c: "#00ffff", n: runs.length },
     { id: "orgs", label: "ORGS", c: "#7c5cff", n: orgs.length },
     { id: "hooks", label: "WEBHOOKS", c: "#ff3b8a", n: hooks.length },
@@ -113,6 +114,7 @@ export default function Dashboard() {
             </div>
           )}
           {tab === "runs" && <RunsTable runs={runs} />}
+          {tab === "playground" && <PlaygroundPanel />}
           {tab === "orgs" && <OrgsTable orgs={orgs} />}
           {tab === "hooks" && <WebhooksPanel hooks={hooks} reload={load} />}
           {tab === "kb" && <KbPanel kb={kb} reload={load} />}
@@ -1217,6 +1219,366 @@ function EmailDraftModal({ data, onClose, onSent }) {
         )}
       </div>
     </div>
+  );
+}
+
+
+
+// ============================================================
+// INDUSTRY PLAYGROUND — interactive per-industry sandbox.
+// Live-runs each agent against pre-loaded industry samples (editable),
+// shows the real LLM response inline. Lets Oliver test JADE end-to-end
+// for any vertical as if he were the operator.
+// ============================================================
+function PlaygroundPanel() {
+  const [industry, setIndustry] = useState("freight_brokerage");
+  const cur = INDUSTRY_BY_ID_LOOKUP(industry);
+
+  return (
+    <div className="space-y-6" data-testid="playground-panel">
+      {/* Industry picker strip */}
+      <div className="deck-card p-6 relative" data-testid="playground-controls">
+        <CornerBrackets />
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:justify-between">
+          <div>
+            <div className="mono-label text-[#7c5cff] mb-1">INDUSTRY PLAYGROUND · LIVE AGENTS</div>
+            <p className="text-xs text-white/55 max-w-2xl leading-relaxed">
+              Pick a vertical → JADE pre-loads realistic sample inputs across all 4 agents.
+              Hit RUN on any card to fire the real LLM endpoint. Edit the inputs to test your own scenarios.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {INDUSTRIES.map((i) => {
+              const active = i.id === industry;
+              return (
+                <button
+                  key={i.id}
+                  data-testid={`playground-industry-${i.id}`}
+                  onClick={() => setIndustry(i.id)}
+                  className="px-3 py-2 mono-label text-[10px] transition"
+                  style={{
+                    border: `1px solid ${active ? i.color : "rgba(255,255,255,0.12)"}`,
+                    color: active ? i.color : "rgba(255,255,255,0.55)",
+                    background: active ? `${i.color}14` : "transparent",
+                  }}
+                >
+                  {i.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 2x2 agent grid */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <ExtractCard industry={industry} color={cur.color} />
+        <QualifyLeadCard industry={industry} color="#ccff00" />
+        <SupportTriageCard industry={industry} color="#00ffff" />
+        <DraftOutreachCard industry={industry} color="#ff3b8a" />
+      </div>
+    </div>
+  );
+}
+
+const INDUSTRY_BY_ID_LOOKUP = (id) => INDUSTRIES.find((i) => i.id === id) || INDUSTRIES[0];
+const sampleFor = (industry) => SAMPLES[industry] || SAMPLES.general || {};
+
+function AgentCardShell({ title, color, busy, children, footer, testid }) {
+  return (
+    <div className="deck-card relative" data-testid={testid}>
+      <CornerBrackets />
+      <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div className="mono-label" style={{ color }}>{title}</div>
+        {busy && (
+          <span className="font-mono-tech text-[10px] text-[#ccff00] animate-pulse">// running…</span>
+        )}
+      </div>
+      <div className="p-5 space-y-4">
+        {children}
+      </div>
+      {footer && <div className="px-5 pb-5">{footer}</div>}
+    </div>
+  );
+}
+
+function ResultBlock({ title, color, content, monoJson }) {
+  if (!content) return null;
+  return (
+    <div className="mt-3">
+      <div className="mono-label text-[10px] mb-2" style={{ color }}>{title}</div>
+      <pre
+        className="font-mono-tech text-[11px] text-white/80 leading-relaxed whitespace-pre-wrap break-words border border-white/10 p-3 bg-black/40 max-h-[320px] overflow-auto"
+      >
+        {monoJson ? JSON.stringify(content, null, 2) : content}
+      </pre>
+    </div>
+  );
+}
+
+// ---------- EXTRACT ----------
+function ExtractCard({ industry, color }) {
+  const sample = sampleFor(industry).extract || "Paste any text or document here…";
+  const [text, setText] = useState(sample);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  useEffect(() => { setText(sampleFor(industry).extract || ""); setResult(null); }, [industry]);
+
+  const run = async () => {
+    setBusy(true); setResult(null);
+    try {
+      const { data } = await api.post("/agent/extract", { text, industry }, { timeout: 60000 });
+      setResult(data.extracted);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Extract failed.");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <AgentCardShell title="EXTRACT · STRUCTURED JSON FROM DOCS" color={color} busy={busy} testid="playground-extract">
+      <textarea
+        data-testid="playground-extract-input"
+        className="input-tech font-mono-tech text-xs leading-relaxed"
+        rows={8}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button
+        data-testid="playground-extract-run"
+        onClick={run}
+        disabled={busy || !text.trim()}
+        className="btn-jade inline-flex items-center gap-2"
+      >
+        <Lightning size={14} weight="bold" /> RUN EXTRACT
+      </button>
+      <ResultBlock title="EXTRACTED JSON" color={color} content={result} monoJson />
+    </AgentCardShell>
+  );
+}
+
+// ---------- QUALIFY LEAD ----------
+function QualifyLeadCard({ industry, color }) {
+  const seed = () => ({
+    company: "Acme " + (sampleFor(industry).outreach_recipient || "Logistics"),
+    role: "Director of Operations",
+    use_case: sampleFor(industry).outreach_summary || "looking to automate ops",
+    monthly_volume: "1,200 tickets/mo",
+    budget: "$1,500-$4,500/mo",
+    timeline: "30 days",
+  });
+  const [form, setForm] = useState(seed());
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  useEffect(() => { setForm(seed()); setResult(null); /* eslint-disable-next-line */ }, [industry]);
+
+  const run = async () => {
+    setBusy(true); setResult(null);
+    try {
+      const { data } = await api.post("/agent/qualify-lead", { industry, ...form }, { timeout: 60000 });
+      setResult(data.result);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Qualify failed.");
+    } finally { setBusy(false); }
+  };
+
+  const tierColor = (t) => t === "hot" ? "#ff3b8a" : t === "warm" ? "#ccff00" : t === "cold" ? "#7c5cff" : "#fff";
+  const fld = (k, label, span = 1) => (
+    <label className={`block ${span === 2 ? "col-span-2" : ""}`}>
+      <span className="mono-label text-[10px] text-white/40 block mb-1">{label}</span>
+      <input
+        data-testid={`playground-qualify-${k}`}
+        className="input-tech text-xs py-1.5"
+        value={form[k]}
+        onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+      />
+    </label>
+  );
+
+  return (
+    <AgentCardShell title="QUALIFY LEAD · 0-100 FIT SCORE" color={color} busy={busy} testid="playground-qualify">
+      <div className="grid grid-cols-2 gap-3">
+        {fld("company", "COMPANY")}
+        {fld("role", "ROLE")}
+        {fld("use_case", "USE CASE", 2)}
+        {fld("monthly_volume", "VOLUME")}
+        {fld("budget", "BUDGET")}
+        {fld("timeline", "TIMELINE", 2)}
+      </div>
+      <button
+        data-testid="playground-qualify-run"
+        onClick={run}
+        disabled={busy}
+        className="btn-jade inline-flex items-center gap-2"
+      >
+        <Lightning size={14} weight="bold" /> SCORE LEAD
+      </button>
+      {result && (
+        <div className="border border-white/10 p-4 bg-black/40">
+          <div className="flex items-center gap-4 mb-2">
+            <span className="font-display font-black text-4xl tracking-tighter" style={{ color: tierColor(result.tier) }}>
+              {result.score ?? "—"}
+            </span>
+            <span className="mono-label" style={{ color: tierColor(result.tier) }}>{(result.tier || "—").toUpperCase()}</span>
+            {result.recommended_agent && (
+              <span className="mono-label text-white/55 text-[10px] ml-auto">→ {result.recommended_agent}</span>
+            )}
+          </div>
+          <p className="text-xs text-white/80 leading-relaxed">{result.rationale}</p>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div>
+              <div className="mono-label text-[10px] text-[#ccff00] mb-1">GREEN</div>
+              <ul className="space-y-1">{(result.green_flags || []).map((f, i) => <li key={i} className="font-mono-tech text-[11px] text-white/70">▸ {f}</li>)}</ul>
+            </div>
+            <div>
+              <div className="mono-label text-[10px] text-[#ff3b8a] mb-1">RED</div>
+              <ul className="space-y-1">{(result.red_flags || []).map((f, i) => <li key={i} className="font-mono-tech text-[11px] text-white/70">▸ {f}</li>)}</ul>
+            </div>
+          </div>
+          {result.next_action && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <div className="mono-label text-[10px] text-[#00ffff] mb-1">NEXT ACTION</div>
+              <p className="text-xs text-white/80">{result.next_action}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </AgentCardShell>
+  );
+}
+
+// ---------- SUPPORT TRIAGE ----------
+function SupportTriageCard({ industry, color }) {
+  const sample = sampleFor(industry).ticket || "A customer wrote in with a problem…";
+  const [ticket, setTicket] = useState(sample);
+  const [context, setContext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  useEffect(() => { setTicket(sampleFor(industry).ticket || ""); setResult(null); }, [industry]);
+
+  const run = async () => {
+    setBusy(true); setResult(null);
+    try {
+      const { data } = await api.post("/agent/support-triage", { industry, ticket, company_context: context }, { timeout: 60000 });
+      setResult(data.result);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Triage failed.");
+    } finally { setBusy(false); }
+  };
+
+  const priColor = (p) => ({ p0: "#ff3b8a", p1: "#ff3b8a", p2: "#ccff00", p3: "#7c5cff" }[p] || "#fff");
+
+  return (
+    <AgentCardShell title="SUPPORT TRIAGE · TIER-1 ROUTING" color={color} busy={busy} testid="playground-triage">
+      <textarea
+        data-testid="playground-triage-input"
+        className="input-tech font-mono-tech text-xs leading-relaxed"
+        rows={6}
+        placeholder="Paste the inbound ticket…"
+        value={ticket}
+        onChange={(e) => setTicket(e.target.value)}
+      />
+      <input
+        data-testid="playground-triage-context"
+        className="input-tech text-xs"
+        placeholder="Optional company context (e.g. 'SaaS, 250 seats, enterprise tier')"
+        value={context}
+        onChange={(e) => setContext(e.target.value)}
+      />
+      <button
+        data-testid="playground-triage-run"
+        onClick={run}
+        disabled={busy || !ticket.trim()}
+        className="btn-jade inline-flex items-center gap-2"
+      >
+        <Lightning size={14} weight="bold" /> TRIAGE
+      </button>
+      {result && (
+        <div className="border border-white/10 p-4 bg-black/40 space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="mono-label text-[11px]" style={{ color: priColor(result.priority) }}>{(result.priority || "—").toUpperCase()}</span>
+            <span className="mono-label text-[11px] text-[#00ffff]">{(result.category || "—").toUpperCase()}</span>
+            <span className="mono-label text-[11px] text-white/60">SENTIMENT: {(result.sentiment || "—").toUpperCase()}</span>
+            {result.escalate && (
+              <span className="mono-label text-[11px] text-[#ff3b8a] ml-auto">ESCALATE → {result.escalate_to || "ops"}</span>
+            )}
+          </div>
+          <p className="text-xs text-white/85 italic">{result.summary}</p>
+          <div>
+            <div className="mono-label text-[10px] text-[#ccff00] mb-1">SUGGESTED RESPONSE</div>
+            <p className="font-mono-tech text-xs text-white/75 leading-relaxed whitespace-pre-wrap">{result.suggested_response}</p>
+          </div>
+          {result.tags?.length > 0 && (
+            <div className="pt-2 border-t border-white/10 flex flex-wrap gap-1.5">
+              {result.tags.map((t, i) => (
+                <span key={i} className="mono-label text-[9px] px-2 py-0.5 border border-white/10 text-white/60">{t}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </AgentCardShell>
+  );
+}
+
+// ---------- DRAFT OUTREACH ----------
+function DraftOutreachCard({ industry, color }) {
+  const seedRecip = () => sampleFor(industry).outreach_recipient || "—";
+  const seedSummary = () => sampleFor(industry).outreach_summary || "";
+  const [recipient, setRecipient] = useState(seedRecip());
+  const [summary, setSummary] = useState(seedSummary());
+  const [tone, setTone] = useState("operator_direct");
+  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  useEffect(() => { setRecipient(seedRecip()); setSummary(seedSummary()); setEmail(""); /* eslint-disable-next-line */ }, [industry]);
+
+  const run = async () => {
+    setBusy(true); setEmail("");
+    try {
+      const { data } = await api.post("/agent/draft-outreach", { industry, recipient, summary, tone }, { timeout: 60000 });
+      setEmail(data.email);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Draft failed.");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <AgentCardShell title="DRAFT OUTREACH · COLD/WARM EMAILS" color={color} busy={busy} testid="playground-outreach">
+      <input
+        data-testid="playground-outreach-recipient"
+        className="input-tech text-xs"
+        placeholder="Recipient (name or company)"
+        value={recipient}
+        onChange={(e) => setRecipient(e.target.value)}
+      />
+      <textarea
+        data-testid="playground-outreach-summary"
+        className="input-tech font-mono-tech text-xs leading-relaxed"
+        rows={5}
+        placeholder="Context (what you want to communicate)"
+        value={summary}
+        onChange={(e) => setSummary(e.target.value)}
+      />
+      <select
+        data-testid="playground-outreach-tone"
+        className="input-tech text-xs py-2"
+        value={tone}
+        onChange={(e) => setTone(e.target.value)}
+      >
+        <option value="operator_direct">OPERATOR-DIRECT</option>
+        <option value="courteous_direct">COURTEOUS-DIRECT</option>
+        <option value="warm">WARM</option>
+        <option value="urgent">URGENT</option>
+      </select>
+      <button
+        data-testid="playground-outreach-run"
+        onClick={run}
+        disabled={busy || !summary.trim()}
+        className="btn-jade inline-flex items-center gap-2"
+      >
+        <Lightning size={14} weight="bold" /> DRAFT EMAIL
+      </button>
+      <ResultBlock title="DRAFTED EMAIL" color={color} content={email} />
+    </AgentCardShell>
   );
 }
 
