@@ -1688,6 +1688,91 @@ from design_partners_seed import SEED_ACCOUNTS
 from industry_capabilities import build_industry_capabilities, capabilities_for, CAPABILITIES_BY_INDUSTRY
 from requirements_kit import build_requirements, requirements_for
 from competitive_moat import build_competitive_moat
+from operations import build_operations
+
+
+@api.get("/admin/operations")
+async def admin_operations(_: str = Depends(require_admin)):
+    """Lighthouse program operating system: team, costs, SLA, onboarding, roadmap, financials, milestones."""
+    return build_operations()
+
+
+# ============================================================
+# PILOT TICKETS — per-client P1/P2/P3 SLA tracking
+# Wired to the design_partners pipeline so each pilot's tickets
+# show next to their pipeline card.
+# ============================================================
+
+class PilotTicketCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    partner_id: Optional[str] = None
+    company: str
+    priority: str  # P1 | P2 | P3
+    title: str
+    description: Optional[str] = None
+    reporter: Optional[str] = "operator"
+
+
+@api.get("/admin/pilot-tickets")
+async def admin_pilot_tickets(_: str = Depends(require_admin)):
+    """List all pilot tickets, newest first. Used by the Operations tab + per-partner subview."""
+    docs = await db.pilot_tickets.find({}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    by_priority = {"P1": [], "P2": [], "P3": []}
+    for d in docs:
+        by_priority.setdefault(d.get("priority", "P3"), []).append(d)
+    open_p1 = sum(1 for d in docs if d.get("priority") == "P1" and d.get("status") == "open")
+    open_p2 = sum(1 for d in docs if d.get("priority") == "P2" and d.get("status") == "open")
+    open_p3 = sum(1 for d in docs if d.get("priority") == "P3" and d.get("status") == "open")
+    return {
+        "all": docs,
+        "by_priority": by_priority,
+        "total": len(docs),
+        "open": {"P1": open_p1, "P2": open_p2, "P3": open_p3},
+    }
+
+
+@api.post("/admin/pilot-tickets")
+async def admin_pilot_ticket_create(body: PilotTicketCreate, _: str = Depends(require_admin)):
+    if body.priority not in ("P1", "P2", "P3"):
+        raise HTTPException(400, "priority must be P1, P2, or P3")
+    now = _utcnow_iso()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "created_at": now,
+        "updated_at": now,
+        "status": "open",
+        "resolved_at": None,
+        **body.model_dump(),
+    }
+    await db.pilot_tickets.insert_one(doc)
+    return doc
+
+
+@api.patch("/admin/pilot-tickets/{ticket_id}")
+async def admin_pilot_ticket_update(ticket_id: str, status: Optional[str] = None, priority: Optional[str] = None, _: str = Depends(require_admin)):
+    update = {"updated_at": _utcnow_iso()}
+    if status:
+        if status not in ("open", "in_progress", "resolved"):
+            raise HTTPException(400, "invalid status")
+        update["status"] = status
+        if status == "resolved":
+            update["resolved_at"] = _utcnow_iso()
+    if priority:
+        if priority not in ("P1", "P2", "P3"):
+            raise HTTPException(400, "invalid priority")
+        update["priority"] = priority
+    res = await db.pilot_tickets.update_one({"id": ticket_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "ticket not found")
+    return await db.pilot_tickets.find_one({"id": ticket_id}, {"_id": 0})
+
+
+@api.delete("/admin/pilot-tickets/{ticket_id}")
+async def admin_pilot_ticket_delete(ticket_id: str, _: str = Depends(require_admin)):
+    res = await db.pilot_tickets.delete_one({"id": ticket_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "ticket not found")
+    return {"ok": True}
 
 
 @api.get("/admin/competitive-moat")
