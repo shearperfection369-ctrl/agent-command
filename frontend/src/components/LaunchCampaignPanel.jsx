@@ -296,7 +296,7 @@ export default function LaunchCampaignPanel() {
                             onChange={(e) => setFilterPhase(e.target.value)}
                             className="input-tech text-xs py-1.5 w-[140px]"
                         >
-                            {allPhases.map((p) => <option key={p} value={p}>PHASE · {p}</option>)}
+                            {allPhases.map((p) => <option key={p} value={p}>{p === "ALL" ? "PHASE · ALL" : `PHASE · ${p}`}</option>)}
                         </select>
                         <select
                             data-testid="filter-platform"
