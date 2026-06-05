@@ -8,6 +8,7 @@ import {
 } from "@/lib/icons";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
+import { JadeGenesisCard } from "../components/JadeGenesisCard";
 
 const AGENTS = [
   { id: "support", label: "TIER-1 SUPPORT", color: "#ccff00", icon: Headset, title: "Customer Support Agent",
@@ -184,6 +185,26 @@ export default function Landing() {
               <Link to="/cases" className="btn-ghost text-center text-xs">SEE EXISTING FIELD REPORTS</Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ============== MEET JADE · GENESIS ============== */}
+      <section className="relative bg-console py-24 lg:py-32 px-6 lg:px-10 border-t border-white/5" data-testid="landing-meet-jade">
+        <div className="max-w-[1400px] mx-auto">
+          <SectionLabel idx={1} color="#00ffff">MEET JADE</SectionLabel>
+          <div className="mb-10 max-w-3xl">
+            <h2 className="font-display font-bold text-white text-4xl sm:text-5xl tracking-tight leading-tight">
+              This is <span className="accent-jade">Genesis.</span>
+              <br />The first image Jade made of herself.
+            </h2>
+            <p className="mt-5 text-white/65 leading-relaxed text-lg">
+              JADE is the AI doing the work. Genesis is the first portrait she generated when asked
+              to picture herself — the operator who never sleeps, the one who sorts your inbox while
+              you handle the customer, the one who triages the queue before the support team logs
+              on. Talk to her below.
+            </p>
+          </div>
+          <JadeGenesisCard />
         </div>
       </section>
 

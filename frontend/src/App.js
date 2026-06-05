@@ -18,6 +18,7 @@ import Portal from "@/pages/Portal";
 import Lighthouse from "@/pages/Lighthouse";
 import PlaybookBuilder from "@/pages/PlaybookBuilder";
 import EmbedReel from "@/pages/EmbedReel";
+import PressKit from "@/pages/PressKit";
 
 function Chrome({ children }) {
   const { pathname } = useLocation();
@@ -65,6 +66,7 @@ function App() {
             <Route path="/lighthouse" element={<Lighthouse />} />
             <Route path="/playbooks/new" element={<PlaybookBuilder />} />
             <Route path="/embed/reel" element={<EmbedReel />} />
+            <Route path="/press" element={<PressKit />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Dashboard />} />
           </Routes>

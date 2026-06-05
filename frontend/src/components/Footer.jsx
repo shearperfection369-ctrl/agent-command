@@ -29,6 +29,7 @@ export default function Footer() {
             <li><Link className="hover:text-[#00ffff]" to="/launch">Launch Kit</Link></li>
             <li><Link className="hover:text-[#00ffff]" to="/billing">Pricing</Link></li>
             <li><Link className="hover:text-[#00ffff]" to="/portal">Customer Portal</Link></li>
+            <li><Link className="hover:text-[#00ffff]" to="/press" data-testid="footer-press-link">Press Kit</Link></li>
           </ul>
         </div>
         <div>
