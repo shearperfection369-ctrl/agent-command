@@ -90,12 +90,18 @@ export default function Landing() {
         {/* Right gutter — JADE OS quanta device w/ holographic console */}
         <div className="absolute top-0 bottom-0 right-0 w-[46%] hidden lg:block pointer-events-none overflow-hidden">
           <img
-            src="https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/7atwkaoe_quanta-1779558560741.png"
+            src="/assets/quanta.png"
             alt="JADE OS · quanta device projecting a holographic operator console"
             data-testid="hero-quanta-image"
             className="absolute inset-0 w-full h-full object-cover object-center"
             loading="eager"
             decoding="async"
+            onError={(e) => {
+              if (!e.currentTarget.dataset.fellBack) {
+                e.currentTarget.dataset.fellBack = "1";
+                e.currentTarget.src = "/assets/quanta-fallback.svg";
+              }
+            }}
           />
           {/* Console-black bleed on the inner edge so it dissolves into the left content */}
           <div
@@ -359,7 +365,7 @@ export default function Landing() {
             <div className="relative" data-testid="landing-workspace-frame">
               {/* image with very subtle bracket overlay — let the product shot breathe */}
               <img
-                src="https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/cghzdrkp_jade%20ultra%20image.png"
+                src="/assets/workspace.png"
                 alt="JADE OS workstation — laptop and curved monitor displaying the console interface"
                 loading="lazy"
                 decoding="async"

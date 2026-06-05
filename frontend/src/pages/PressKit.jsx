@@ -4,10 +4,10 @@ import { CornerBrackets } from "../components/Brackets";
 import { toast } from "sonner";
 
 const ASSETS = {
-  workspace: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/cghzdrkp_jade%20ultra%20image.png",
-  quanta: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/7atwkaoe_quanta-1779558560741.png",
-  banner: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/fahm9un7_banner-970x260.png",
-  voice: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/jlqa2gtk_09-jade-survival-codex.mp3",
+  workspace: "/assets/workspace.png",
+  quanta: "/assets/quanta.png",
+  banner: "/assets/banner.png",
+  voice: "/assets/jade-voice.mp3",
 };
 
 const COLORS = [

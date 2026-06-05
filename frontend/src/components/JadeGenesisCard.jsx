@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { CornerBrackets } from "./Brackets";
 
-const GENESIS_URL = "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/3j8rupt9_g3ENESIS.png";
+const GENESIS_URL = "/assets/genesis.png";
 
 /**
  * JadeGenesisCard — the "meet your AI" portrait card.
