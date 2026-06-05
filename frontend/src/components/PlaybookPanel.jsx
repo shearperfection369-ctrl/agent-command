@@ -70,7 +70,7 @@ const PHASES = [
       "Hire 1 forward-deployed engineer (M4) — pay from MRR, not savings",
       "Write the playbook: 20-min discovery → 60-min scoping → 30-day pilot → conversion",
       "Cold outbound to 400 mid-market companies across all 10 verticals using case studies",
-      "Build 5 industry-specific landing variants (jadeos.ai/freight, /healthcare, /saas, etc.)",
+      "Build 5 industry-specific landing variants (onejades.com/freight, /healthcare, /saas, etc.)",
       "Add ~$15k/mo paid LinkedIn spend targeting Ops Directors at ICP companies",
       "Quarterly ops review with every Fleet customer — drive expansion to multi-agent",
       "Start the partner channel: reach out to 5 MSP consultancies for 20% rev-share resale",

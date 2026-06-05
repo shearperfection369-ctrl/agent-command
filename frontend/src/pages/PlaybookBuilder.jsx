@@ -47,10 +47,10 @@ export default function PlaybookBuilder() {
         industry,
         description,
         steps,
-        owner_email: ownerEmail || "anon@jadeos.ai",
+        owner_email: ownerEmail || "anon@onejades.com",
       });
       // The endpoint generated a unique slug — fetch it
-      const list = await api.get("/playbooks/by-owner", { params: { email: ownerEmail || "anon@jadeos.ai" } });
+      const list = await api.get("/playbooks/by-owner", { params: { email: ownerEmail || "anon@onejades.com" } });
       const slug = list.data[0]?.slug;
       if (!slug) throw new Error("Failed to save temp playbook");
       const { data } = await api.post("/playbooks/run", { slug, input: testInput, industry, provider: "anthropic" });

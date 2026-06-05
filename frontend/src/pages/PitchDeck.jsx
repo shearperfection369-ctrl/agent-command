@@ -85,7 +85,7 @@ const SLIDES = [
       { k: "SAAS SUPPORT", v: "+18 CSAT", c: "#7c5cff" },
       { k: "RUNS LOGGED", v: "6,300+", c: "#ff3b8a" },
     ],
-    foot: "FULL FIELD REPORTS AT JADEOS.AI/CASES",
+    foot: "FULL FIELD REPORTS AT ONEJADES.COM/CASES",
   },
   {
     id: 8, kind: "tiers",

@@ -47,6 +47,7 @@ STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER", "")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://mpls-automation-hub.preview.emergentagent.com").rstrip("/")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 RESEND_SENDER = os.environ.get("RESEND_SENDER", "onboarding@resend.dev")
 RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
@@ -988,6 +989,12 @@ async def lighthouse_apply(body: LighthouseCreate):
         app.status = "screening"
     await db.lighthouse_applications.insert_one(app.model_dump())
     await _log_run("qualify_lead", "anthropic", DEFAULT_MODELS["anthropic"], f"[lighthouse] {app.company} · {app.industry}", json.dumps(qual)[:500])
+    # --- AUTO-FOLLOWUP · web applicants get an immediate welcome email + SMS (if phone known) ---
+    snap = app.model_dump()
+    if snap.get("email"):
+        asyncio.create_task(_send_welcome_email(snap["email"], snap))
+    if snap.get("phone"):
+        asyncio.create_task(_send_followup_sms(snap["phone"], snap))
     return app
 
 
@@ -1796,11 +1803,186 @@ async def twilio_sms_inbound(request: Request):
     })
 
     confirm = f"Locked in, operator. JADE scored you {app_doc.score}/100 ({(app_doc.tier or 'pending').upper()}). " + (
-        "Hot fit — we'll call within 48h." if app_doc.tier == "hot"
-        else "We'll review and reach out."
+        "Hot fit — we'll call within 48h. Demo + pilot link incoming."
+        if app_doc.tier == "hot"
+        else "We'll review and reach out. Demo + pilot link incoming."
     )
     reply.message(confirm)
+    # --- AUTO-FOLLOWUP · second SMS with demo reel link + email if any ---
+    snap = app_doc.model_dump()
+    asyncio.create_task(_send_followup_sms(from_number, snap))
+    if snap.get("email") and not snap["email"].startswith("sms+"):
+        asyncio.create_task(_send_welcome_email(snap["email"], snap))
     return PlainTextResponse(content=str(reply), media_type="application/xml")
+
+
+# ============================================================
+# AUTO-FOLLOWUP · after vetting a caller, fire SMS (immediate)
+# and welcome email (if Resend configured + email known). Queues
+# missing-channel sends in db.auto_followups for the admin to see.
+# ============================================================
+def _welcome_email_subject(name: str) -> str:
+    first = (name or "Operator").split()[0]
+    return f"{first} — your JADE OS pilot package (5 min read)"
+
+
+def _welcome_email_body_plain(app: dict) -> str:
+    first = (app.get("name") or "Operator").split()[0]
+    demo_url = f"{PUBLIC_BASE_URL}/demo-reel"
+    pricing_url = f"{PUBLIC_BASE_URL}/#pricing"
+    lighthouse_url = f"{PUBLIC_BASE_URL}/lighthouse"
+    video_url = f"{PUBLIC_BASE_URL}/api/promo/video"
+    score_line = (
+        f"JADE auto-scored your call: {app.get('score', '--')} ({(app.get('tier') or '--').upper()}). "
+        + ((app.get('rationale') or "")[:280])
+    ).strip()
+    return (
+        f"Hi {first},\n\n"
+        f"Thanks for the call -- JADE is the AI-agent platform built for Minneapolis ops teams "
+        f"who are drowning in inbox / docs / tickets / leads work. Three things while it's fresh:\n\n"
+        f"1) Watch the 12-second demo reel: {video_url}\n"
+        f"   (Or the embedded version with full context: {demo_url})\n\n"
+        f"2) Your fit assessment\n"
+        f"   {score_line}\n\n"
+        f"3) Two next steps -- pick one:\n"
+        f"   - Claim a Lighthouse pilot spot ($750 / 1-month, full white-glove setup): {lighthouse_url}\n"
+        f"   - Self-serve pricing + book a 15-min walkthrough: {pricing_url}\n\n"
+        f"What JADE does today, in plain English:\n"
+        f"  * Auto-files chaotic inboxes by topic/priority (the Outlook drag-and-drop nightmare, gone)\n"
+        f"  * Extracts BOLs, intake forms, contracts to clean JSON in 8 seconds\n"
+        f"  * Triages support tickets with priority + suggested response\n"
+        f"  * Scores inbound leads 0-100 with green/red flags\n"
+        f"  * Runs multi-step playbooks (chain agents -- extract -> score -> draft email -> send)\n\n"
+        f"All operator-grade -- your data stays in your tenant, no model training.\n\n"
+        f"Reply to this email or text the number you just called. I read every one personally.\n\n"
+        f"-- Oliver Cummins\n"
+        f"   Founder, JADE OS · onejades.com\n"
+    )
+
+
+async def _enqueue_followup(channel: str, *, to: str, app: dict, status: str = "queued",
+                            payload: Optional[dict] = None, error: Optional[str] = None) -> str:
+    fid = str(uuid.uuid4())
+    await db.auto_followups.insert_one({
+        "id": fid, "channel": channel, "to": to,
+        "app_id": app.get("id"), "app_score": app.get("score"), "app_tier": app.get("tier"),
+        "status": status, "payload": payload or {}, "error": error,
+        "created_at": _utcnow_iso(),
+    })
+    return fid
+
+
+async def _send_followup_sms(phone: str, app: dict) -> dict:
+    if not phone:
+        return {"status": "skipped", "reason": "no phone"}
+    first = (app.get("name") or "there").split()[0]
+    score = app.get("score") or "--"
+    tier = (app.get("tier") or "").upper() or "REVIEW"
+    video_url = f"{PUBLIC_BASE_URL}/api/promo/video"
+    lighthouse_url = f"{PUBLIC_BASE_URL}/lighthouse"
+    msg = (
+        f"Hey {first} -- JADE here. Scored your call {score} ({tier}).\n"
+        f"12-sec demo: {video_url}\n"
+        f"Claim pilot: {lighthouse_url}\n"
+        f"Reply MORE for the full pitch, STOP to opt out."
+    )
+    if not _twilio_configured():
+        fid = await _enqueue_followup("sms", to=phone, app=app, status="queued",
+                                      payload={"body": msg}, error="twilio not configured")
+        return {"status": "queued", "id": fid}
+    try:
+        client = _twilio_client()
+        sent = await asyncio.to_thread(client.messages.create,
+                                       body=msg, from_=TWILIO_PHONE_NUMBER, to=phone)
+        fid = await _enqueue_followup("sms", to=phone, app=app, status="sent",
+                                      payload={"body": msg, "sid": sent.sid})
+        return {"status": "sent", "sid": sent.sid, "id": fid}
+    except Exception as e:
+        log.exception("followup SMS failed")
+        fid = await _enqueue_followup("sms", to=phone, app=app, status="failed",
+                                      payload={"body": msg}, error=str(e))
+        return {"status": "failed", "error": str(e), "id": fid}
+
+
+async def _send_welcome_email(email: str, app: dict) -> dict:
+    if not email or "@" not in email or email.startswith(("voice+", "sms+")):
+        return {"status": "skipped", "reason": "no real email"}
+    subject = _welcome_email_subject(app.get("name") or "")
+    text = _welcome_email_body_plain(app)
+    html = _plain_to_html(text)
+    payload = {"subject": subject, "text": text, "html": html}
+    if not _resend_configured():
+        fid = await _enqueue_followup("email", to=email, app=app, status="queued",
+                                      payload=payload, error="resend not configured")
+        return {"status": "queued", "id": fid}
+    try:
+        result = await _resend_send({
+            "from": RESEND_SENDER, "to": [email], "subject": subject,
+            "text": text, "html": html,
+            "reply_to": "cummins_oliver@yahoo.com",
+            "tags": [
+                {"name": "campaign", "value": "welcome_package"},
+                {"name": "tier", "value": (app.get("tier") or "review")},
+            ],
+        })
+        await db.email_sends.insert_one({
+            "id": str(uuid.uuid4()), "resend_id": result.get("id"),
+            "to": email, "from_": RESEND_SENDER, "subject": subject,
+            "tags": {"campaign": "welcome_package", "tier": app.get("tier")},
+            "status": "sent", "events": [{"type": "sent", "at": _utcnow_iso()}],
+            "created_at": _utcnow_iso(),
+        })
+        fid = await _enqueue_followup("email", to=email, app=app, status="sent",
+                                      payload={**payload, "resend_id": result.get("id")})
+        return {"status": "sent", "resend_id": result.get("id"), "id": fid}
+    except Exception as e:
+        log.exception("welcome email failed")
+        fid = await _enqueue_followup("email", to=email, app=app, status="failed",
+                                      payload=payload, error=str(e))
+        return {"status": "failed", "error": str(e), "id": fid}
+
+
+@api.get("/auto-followups")
+async def auto_followups_list(channel: Optional[str] = None, status: Optional[str] = None,
+                              limit: int = 100, _: str = Depends(require_admin)):
+    q: dict = {}
+    if channel: q["channel"] = channel
+    if status: q["status"] = status
+    docs = await db.auto_followups.find(q, {"_id": 0}).sort("created_at", -1).limit(min(limit, 500)).to_list(min(limit, 500))
+    return docs
+
+
+@api.post("/auto-followups/{fid}/retry")
+async def auto_followups_retry(fid: str, _: str = Depends(require_admin)):
+    rec = await db.auto_followups.find_one({"id": fid}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Not found")
+    app_doc = {"id": rec.get("app_id"), "name": "", "score": rec.get("app_score"), "tier": rec.get("app_tier")}
+    if rec.get("app_id"):
+        real = await db.lighthouse_applications.find_one({"id": rec["app_id"]}, {"_id": 0})
+        if real: app_doc = real
+    if rec["channel"] == "sms":
+        return await _send_followup_sms(rec["to"], app_doc)
+    return await _send_welcome_email(rec["to"], app_doc)
+
+
+class TriggerFollowupRequest(BaseModel):
+    application_id: str
+    email: Optional[EmailStr] = None
+
+
+@api.post("/auto-followups/trigger")
+async def auto_followups_trigger(body: TriggerFollowupRequest, _: str = Depends(require_admin)):
+    """Manually fire SMS + email followup for a given lighthouse application id."""
+    app_doc = await db.lighthouse_applications.find_one({"id": body.application_id}, {"_id": 0})
+    if not app_doc:
+        raise HTTPException(404, "application not found")
+    sms_result = await _send_followup_sms(app_doc.get("phone") or "", app_doc)
+    email_addr = body.email or app_doc.get("email", "")
+    email_result = await _send_welcome_email(email_addr, app_doc)
+    return {"sms": sms_result, "email": email_result}
+
+
 
 
 @api.post("/twilio/voice", response_class=PlainTextResponse)
@@ -1813,7 +1995,7 @@ async def twilio_voice_inbound(request: Request):
         "Welcome to JADE OS, the AI agent platform for Minneapolis operators. "
         "After the tone, tell me your name, company, role, your industry, "
         "and the workflow you want JADE to automate. You have one minute.",
-        voice="Polly.Matthew-Neural",
+        voice="Polly.Joanna-Neural",
     )
     base = str(request.base_url).rstrip("/")
     gather = Gather(
@@ -1825,7 +2007,8 @@ async def twilio_voice_inbound(request: Request):
         language="en-US",
     )
     resp.append(gather)
-    resp.say("Didn't catch that. Visit one jades dot com slash lighthouse, or text us back. Goodbye.")
+    resp.say("Didn't catch that. Visit one jades dot com slash lighthouse, or text us back. Goodbye.",
+             voice="Polly.Joanna-Neural")
     return PlainTextResponse(content=str(resp), media_type="application/xml")
 
 
@@ -1887,13 +2070,19 @@ async def twilio_voice_process(request: Request):
         "matched": True, "application_id": app_doc.id, "created_at": _utcnow_iso(),
     })
 
+    # --- AUTO-FOLLOWUP · fire SMS immediately, queue/send welcome email ---
+    app_snapshot = app_doc.model_dump()
+    asyncio.create_task(_send_followup_sms(from_number, app_snapshot))
+    asyncio.create_task(_send_welcome_email(app_snapshot.get("email", ""), app_snapshot))
+
     score_text = "ninety five" if (app_doc.score or 0) >= 90 else "warm" if (app_doc.tier == "warm") else "captured"
     resp.say(
         f"Locked in. JADE scored you {score_text}. " + (
-            "Hot fit. Expect a call within forty eight hours." if app_doc.tier == "hot"
-            else "We'll review and reach out. Goodbye."
+            "Hot fit. Expect a call within forty eight hours. Watch for a text with your demo reel."
+            if app_doc.tier == "hot"
+            else "We'll review and reach out. Watch for a text with your demo reel. Goodbye."
         ),
-        voice="Polly.Matthew-Neural",
+        voice="Polly.Joanna-Neural",
     )
     return PlainTextResponse(content=str(resp), media_type="application/xml")
 
