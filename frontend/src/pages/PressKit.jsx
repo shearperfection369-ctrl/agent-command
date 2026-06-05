@@ -1,17 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CornerBrackets } from "../components/Brackets";
-import { JadeGenesisCard, GenesisVolumeI } from "../components/JadeGenesisCard";
 import { toast } from "sonner";
 
 const ASSETS = {
-  genesis: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/20n3pz14_jade%20now.png",
-  genesis_original: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/3j8rupt9_g3ENESIS.png",
   quanta: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/7atwkaoe_quanta-1779558560741.png",
   banner: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/fahm9un7_banner-970x260.png",
-  brand1: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/mepnegxg_jbr.png",
-  brand2: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/b9cpp91n_jbr1.png",
-  rte: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/bbw0jlf3_RTE.png",
   voice: "https://customer-assets.emergentagent.com/job_mpls-automation-hub/artifacts/jlqa2gtk_09-jade-survival-codex.mp3",
 };
 
@@ -67,41 +61,22 @@ export default function PressKit() {
         </div>
       </section>
 
-      {/* Meet Jade */}
-      <section className="max-w-7xl mx-auto px-6 py-20" data-testid="press-meet-jade">
-        <div className="mono-label text-[#00ffff] mb-3">02 · MEET JADE</div>
-        <h2 className="font-display font-black tracking-tight text-white mb-10"
-            style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
-          The AI behind the wordmark.
-        </h2>
-        <JadeGenesisCard />
-
-        {/* Volume I episodic series — narrative chapters */}
-        <div className="mt-20">
-          <GenesisVolumeI />
-        </div>
-      </section>
-
       {/* Brand assets grid */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-assets">
-        <div className="mono-label text-[#7c5cff] mb-3">03 · BRAND ASSETS · DOWNLOAD</div>
+        <div className="mono-label text-[#7c5cff] mb-3">02 · BRAND ASSETS · DOWNLOAD</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           Logos, hardware, banners.
         </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AssetTile testid="asset-genesis" name="Jade Portrait (Current)" desc="Official portrait · clearer, full-body · 1:1 framing · v2" url={ASSETS.genesis} />
-          <AssetTile testid="asset-genesis-og" name="Genesis Original" desc="The first image JADE generated of herself · iconic · v1" url={ASSETS.genesis_original} />
-          <AssetTile testid="asset-quanta" name="Quanta Keychain" desc="Hardware companion · lime-LED edges · holographic projection" url={ASSETS.quanta} />
-          <AssetTile testid="asset-banner" name="Web Banner · 970×260" desc="Leaderboard ad unit · cross-platform" url={ASSETS.banner} />
-          <AssetTile testid="asset-brand1" name="JADE Bracket Mark" desc="Primary logo · square format · transparent" url={ASSETS.brand1} />
-          <AssetTile testid="asset-brand2" name="JADE Bracket · Alt" desc="Alternate mark · for dark-on-light contexts" url={ASSETS.brand2} />
+        <div className="grid sm:grid-cols-2 gap-6">
+          <AssetTile testid="asset-quanta" name="Quanta Keychain" desc="Hardware companion · lime-LED edges · holographic projection · the JADE OS hero device" url={ASSETS.quanta} />
+          <AssetTile testid="asset-banner" name="Web Banner · 970×260" desc="Leaderboard ad unit · cross-platform · ready for socials + display" url={ASSETS.banner} />
         </div>
       </section>
 
       {/* Brand palette */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-palette">
-        <div className="mono-label text-[#ff3b8a] mb-3">04 · BRAND PALETTE</div>
+        <div className="mono-label text-[#ff3b8a] mb-3">03 · BRAND PALETTE</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           Five colors, one console.
@@ -130,7 +105,7 @@ export default function PressKit() {
 
       {/* Voice */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-voice">
-        <div className="mono-label text-[#ccff00] mb-3">05 · OFFICIAL VOICE</div>
+        <div className="mono-label text-[#ccff00] mb-3">04 · OFFICIAL VOICE</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           This is what Jade sounds like.
@@ -149,7 +124,7 @@ export default function PressKit() {
 
       {/* Demo reel */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-reel">
-        <div className="mono-label text-[#00ffff] mb-3">06 · PROMOTIONAL REEL</div>
+        <div className="mono-label text-[#00ffff] mb-3">05 · PROMOTIONAL REEL</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           12 seconds. The pitch.
@@ -182,7 +157,7 @@ export default function PressKit() {
 
       {/* Facts */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-facts">
-        <div className="mono-label text-[#7c5cff] mb-3">07 · KEY FACTS</div>
+        <div className="mono-label text-[#7c5cff] mb-3">06 · KEY FACTS</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           Numbers, names, dates.
@@ -200,7 +175,7 @@ export default function PressKit() {
 
       {/* One-liners */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-oneliners">
-        <div className="mono-label text-[#ff3b8a] mb-3">08 · APPROVED ONE-LINERS</div>
+        <div className="mono-label text-[#ff3b8a] mb-3">07 · APPROVED ONE-LINERS</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           Drop these straight into your story.
@@ -226,7 +201,7 @@ export default function PressKit() {
 
       {/* Contact */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-contact">
-        <div className="mono-label text-[#00ffff] mb-3">09 · CONTACT</div>
+        <div className="mono-label text-[#00ffff] mb-3">08 · CONTACT</div>
         <h2 className="font-display font-black tracking-tight text-white mb-10"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           Coverage requests welcome.
