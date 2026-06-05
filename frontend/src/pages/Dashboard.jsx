@@ -6,6 +6,7 @@ import { isAuthed } from "../lib/auth";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus, Lightning, EnvelopeSimple } from "@/lib/icons";
 import { INDUSTRIES, SAMPLES } from "../lib/industries";
+import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -548,11 +549,9 @@ function SelfTestPanel() {
 
       {/* Running state */}
       {running && (
-        <div className="deck-card p-12 relative text-center" data-testid="selftest-running">
+        <div className="deck-card p-12 relative flex justify-center" data-testid="selftest-running">
           <CornerBrackets />
-          <div className="font-mono-tech text-sm text-[#ccff00] animate-pulse">
-            // JADE OS · running diagnostics{deep ? " · LLM round-trips engaged" : ""}…
-          </div>
+          <JadeWorking verb={deep ? "running deep diagnostics" : "running diagnostics"} size={80} />
         </div>
       )}
 
@@ -1150,8 +1149,8 @@ function EmailDraftModal({ data, onClose, onSent }) {
         </div>
 
         {loading && (
-          <div className="p-12 text-center font-mono-tech text-xs text-[#ccff00] animate-pulse" data-testid="email-draft-loading">
-            // JADE drafting tailored outreach package…
+          <div className="p-12 flex justify-center" data-testid="email-draft-loading">
+            <JadeWorking verb="drafting your package" size={72} />
           </div>
         )}
 
@@ -1327,13 +1326,20 @@ function AgentCardShell({ title, color, busy, children, footer, testid }) {
   return (
     <div className="deck-card relative" data-testid={testid}>
       <CornerBrackets />
-      <div className="p-5 border-b border-white/10 flex items-center justify-between">
+      <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3">
         <div className="mono-label" style={{ color }}>{title}</div>
-        {busy && (
-          <span className="font-mono-tech text-[10px] text-[#ccff00] animate-pulse">// running…</span>
+        {busy ? (
+          <JadeAvatar size={40} busy />
+        ) : (
+          <JadeAvatar size={36} />
         )}
       </div>
       <div className="p-5 space-y-4">
+        {busy && (
+          <div className="border border-[#ccff00]/20 bg-[#ccff00]/5 p-3" data-testid={`${testid}-busy`}>
+            <JadeWorking verb={busy === true ? "thinking" : busy} size={48} />
+          </div>
+        )}
         {children}
       </div>
       {footer && <div className="px-5 pb-5">{footer}</div>}
@@ -1374,7 +1380,7 @@ function ExtractCard({ industry, color }) {
   };
 
   return (
-    <AgentCardShell title="EXTRACT · STRUCTURED JSON FROM DOCS" color={color} busy={busy} testid="playground-extract">
+    <AgentCardShell title="EXTRACT · STRUCTURED JSON FROM DOCS" color={color} busy={busy && "extracting"} testid="playground-extract">
       <textarea
         data-testid="playground-extract-input"
         className="input-tech font-mono-tech text-xs leading-relaxed"
@@ -1434,7 +1440,7 @@ function QualifyLeadCard({ industry, color }) {
   );
 
   return (
-    <AgentCardShell title="QUALIFY LEAD · 0-100 FIT SCORE" color={color} busy={busy} testid="playground-qualify">
+    <AgentCardShell title="QUALIFY LEAD · 0-100 FIT SCORE" color={color} busy={busy && "scoring"} testid="playground-qualify">
       <div className="grid grid-cols-2 gap-3">
         {fld("company", "COMPANY")}
         {fld("role", "ROLE")}
@@ -1507,7 +1513,7 @@ function SupportTriageCard({ industry, color }) {
   const priColor = (p) => ({ p0: "#ff3b8a", p1: "#ff3b8a", p2: "#ccff00", p3: "#7c5cff" }[p] || "#fff");
 
   return (
-    <AgentCardShell title="SUPPORT TRIAGE · TIER-1 ROUTING" color={color} busy={busy} testid="playground-triage">
+    <AgentCardShell title="SUPPORT TRIAGE · TIER-1 ROUTING" color={color} busy={busy && "triaging"} testid="playground-triage">
       <textarea
         data-testid="playground-triage-input"
         className="input-tech font-mono-tech text-xs leading-relaxed"
@@ -1581,7 +1587,7 @@ function DraftOutreachCard({ industry, color }) {
   };
 
   return (
-    <AgentCardShell title="DRAFT OUTREACH · COLD/WARM EMAILS" color={color} busy={busy} testid="playground-outreach">
+    <AgentCardShell title="DRAFT OUTREACH · COLD/WARM EMAILS" color={color} busy={busy && "drafting"} testid="playground-outreach">
       <input
         data-testid="playground-outreach-recipient"
         className="input-tech text-xs"

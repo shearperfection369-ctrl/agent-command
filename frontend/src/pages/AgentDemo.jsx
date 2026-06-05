@@ -4,6 +4,7 @@ import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, 
 import { api, API_BASE } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { INDUSTRIES, sampleFor } from "../lib/industries";
+import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
 
 const TABS = [
   { id: "chat", label: "OPS CO-PILOT", icon: ChatCircle, color: "#ccff00" },
@@ -216,10 +217,13 @@ function ChatPanel({ provider, industry }) {
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-5">
           {msgs.map((m, i) => (
             <div key={i} data-testid={`chat-msg-${i}`} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-              <div className="h-8 w-8 border grid place-items-center shrink-0"
-                style={{ borderColor: m.role === "user" ? "#7c5cff" : "#ccff00" }}>
-                {m.role === "user" ? <User size={14} color="#7c5cff" weight="bold" /> : <Robot size={14} color="#ccff00" weight="bold" />}
-              </div>
+              {m.role === "user" ? (
+                <div className="h-10 w-10 border grid place-items-center shrink-0" style={{ borderColor: "#7c5cff" }}>
+                  <User size={14} color="#7c5cff" weight="bold" />
+                </div>
+              ) : (
+                <JadeAvatar size={40} busy={streaming && i === msgs.length - 1} />
+              )}
               <div className={`max-w-[80%] p-4 ${m.role === "user" ? "bg-[#7c5cff]/10 border border-[#7c5cff]/40" : "bg-[#06081a] border border-white/5"}`}>
                 <div className="mono-label mb-2" style={{ color: m.role === "user" ? "#7c5cff" : "#ccff00" }}>{m.role === "user" ? "OPERATOR" : "JADE"}</div>
                 <pre className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap font-sans">{m.text}{m.role === "jade" && streaming && i === msgs.length - 1 && <span className="inline-block w-2 h-4 bg-[#ccff00] ml-1 align-middle animate-pulse" />}</pre>

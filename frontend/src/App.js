@@ -19,6 +19,7 @@ import Lighthouse from "@/pages/Lighthouse";
 import PlaybookBuilder from "@/pages/PlaybookBuilder";
 import EmbedReel from "@/pages/EmbedReel";
 import PressKit from "@/pages/PressKit";
+import { MoodPicker } from "@/components/MoodPicker";
 
 function Chrome({ children }) {
   const { pathname } = useLocation();
@@ -28,6 +29,7 @@ function Chrome({ children }) {
       {!bare && <Nav />}
       {children}
       {!bare && <Footer />}
+      {!bare && <MoodPicker />}
     </>
   );
 }
