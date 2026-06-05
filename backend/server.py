@@ -1687,6 +1687,24 @@ from compliance import build_compliance
 from design_partners_seed import SEED_ACCOUNTS
 from industry_capabilities import build_industry_capabilities, capabilities_for, CAPABILITIES_BY_INDUSTRY
 from requirements_kit import build_requirements, requirements_for
+from competitive_moat import build_competitive_moat
+
+
+@api.get("/admin/competitive-moat")
+async def admin_competitive_moat(_: str = Depends(require_admin)):
+    """Six structural moats + five highest-ROI workflows + comparison table + pitch language."""
+    return build_competitive_moat()
+
+
+@api.get("/competitive-moat/public")
+async def public_competitive_moat():
+    """Public slice — comparison table + outcome metrics for marketing pages."""
+    full = build_competitive_moat()
+    return {
+        "moats": [{"id": m["id"], "title": m["title"], "competitor_does": m["competitor_does"], "jade_does": m["jade_does"]} for m in full["moats"]],
+        "comparison_table": full["comparison_table"],
+        "highest_roi_workflows": [{"name": w["name"], "manual_time": w["manual_time"], "jade_time": w["jade_time"], "hours_saved_week": w["hours_saved_week"]} for w in full["highest_roi_workflows"]],
+    }
 
 
 @api.get("/admin/requirements")
@@ -1732,29 +1750,38 @@ class LoadMatchRequest(BaseModel):
 
 @api.post("/agent/freight/load-match")
 async def freight_load_match(body: LoadMatchRequest):
-    """Surface top-3 carrier matches with rationale + flag exceptions.
+    """Surface top-4 carrier matches with rationale + flag exceptions + check
+    HOS feasibility + rate-vs-market realism + draft shipper response + set
+    follow-up reminder. The full HubSpot-killer scenario in 45 seconds.
 
-    Uses the existing LLM stack with a freight-tuned matcher prompt.
-    Replaces 10 minutes of TMS searching with 30 seconds of structured output."""
+    Returns: {top_matches[4], exceptions[], hos_feasibility, rate_analysis,
+    drafted_response, followup_reminder_minutes, broker_review_notes[]}"""
     sys = (
-        "You are JADE OS's freight load-matcher. Given a load specification, "
-        "return ONLY JSON: {top_matches:[3 {carrier_profile, fit_score_0_100, "
-        "fit_rationale, lanes_match, equipment_match, certifications, exception_flags[]}], "
-        "exceptions:[{type, severity, recommendation}], lane_difficulty_score_0_100, "
-        "next_actions:[2-3 next steps for the broker]}. "
-        "fit_score must consider equipment, lane history, weight handling, hazmat/temp certs. "
-        "exception_flags surface anything that would block coverage (overweight, hazmat without HM-cert, etc)."
+        "You are JADE OS's freight operator-grade agent — not a generic AI copilot. "
+        "You know load board semantics, DOT regs, HOS rules, hazmat, equipment, "
+        "axle weight limits, and shipper negotiation patterns. "
+        "Return ONLY JSON: {"
+        "top_matches: [4 {carrier_profile, mc_number, fit_score_0_100, fit_rationale, "
+        "lanes_match, equipment_match, certifications, typical_rate_band, capacity_signal}], "
+        "exceptions: [{type, severity (low|med|high|blocker), explanation, recommended_action}], "
+        "equipment_mismatch_flag (bool · true if shipper-requested equipment doesn't fit weight/commodity), "
+        "hos_feasibility: {feasible (bool), drive_hours_required, on_duty_window_required, notes}, "
+        "rate_analysis: {market_rate_low, market_rate_high, shipper_budget, gap_pct, verdict (below_market|in_range|premium), counter_quote_suggestion}, "
+        "drafted_response: {subject, body (4-7 lines, broker reviewing), tone_notes}, "
+        "followup_reminder_minutes (90-240 based on urgency), "
+        "broker_review_notes: [2-3 things the broker must verify before sending]}. "
+        "Use realistic MSP-area lane rates. Never make up FMCSA MC numbers — use plausible 6-7 digit numbers prefixed with MC-."
     )
     prompt = (
-        f"LOAD\n"
+        f"LOAD INQUIRY\n"
         f"Origin: {body.origin}\n"
         f"Destination: {body.destination}\n"
         f"Commodity: {body.commodity}\n"
         f"Weight: {body.weight_lbs} lbs\n"
-        f"Equipment: {body.equipment}\n"
-        f"Pickup: {body.pickup_date or 'flexible'}\n"
-        f"Special: {body.special_requirements or 'none'}\n\n"
-        "Return JSON only. Use plausible carrier names and realistic fit reasoning."
+        f"Equipment requested: {body.equipment}\n"
+        f"Pickup window: {body.pickup_date or 'flexible'}\n"
+        f"Special: {body.special_requirements or 'none'}\n"
+        "Run the full operator analysis. JSON only."
     )
     try:
         chat = _llm(str(uuid.uuid4()), sys, body.provider)

@@ -13,6 +13,7 @@ import LaunchCampaignPanel from "../components/LaunchCampaignPanel";
 import CompliancePanel from "../components/CompliancePanel";
 import DesignPartnersPanel from "../components/DesignPartnersPanel";
 import PartnerPackagePanel from "../components/PartnerPackagePanel";
+import CompetitiveEdgePanel from "../components/CompetitiveEdgePanel";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -62,6 +63,7 @@ export default function Dashboard() {
 
   const TABS = [
     { id: "health", label: "HEALTH · DIAGNOSTICS", c: "#ff3b8a", n: "" },
+    { id: "edge", label: "COMPETITIVE EDGE", c: "#ffce4f", n: "" },
     { id: "partners", label: "DESIGN PARTNERS", c: "#ccff00", n: "" },
     { id: "package", label: "PARTNER PACKAGE", c: "#00ffff", n: "" },
     { id: "compliance", label: "COMPLIANCE · ROUTE", c: "#7c5cff", n: "" },
@@ -119,6 +121,7 @@ export default function Dashboard() {
       <section className="px-6 lg:px-10 py-10">
         <div className="max-w-[1400px] mx-auto">
           {tab === "health" && <HealthPanel />}
+          {tab === "edge" && <CompetitiveEdgePanel />}
           {tab === "partners" && <DesignPartnersPanel />}
           {tab === "package" && <PartnerPackagePanel />}
           {tab === "compliance" && <CompliancePanel />}
