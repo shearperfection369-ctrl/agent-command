@@ -1683,6 +1683,31 @@ async def admin_repair_clear_stale(days: int = 30, _: str = Depends(require_admi
 # post templates + per-platform video assets.
 # ============================================================
 from launch_campaign import build_campaign
+from compliance import build_compliance
+
+
+@api.get("/admin/compliance")
+async def admin_compliance(_: str = Depends(require_admin)):
+    """Return the full industry-routing + compliance roadmap.
+    Pure data — no LLM, no I/O — safe to call frequently."""
+    return build_compliance()
+
+
+@api.get("/compliance/public")
+async def public_compliance():
+    """Public-facing slice (status + industry labels only) for the marketing
+    site's 'which verticals do you serve' page. No costs or internal notes."""
+    full = build_compliance()
+    return {
+        "ready_now": [
+            {"id": i["id"], "label": i["label"], "headline": i["headline"]}
+            for i in full["industries"] if i.get("ready_to_sell")
+        ],
+        "coming_soon": [
+            {"id": i["id"], "label": i["label"], "headline": i["headline"]}
+            for i in full["industries"] if not i.get("ready_to_sell")
+        ],
+    }
 
 
 @api.get("/admin/launch/campaign")

@@ -1,15 +1,15 @@
 export const INDUSTRIES = [
-  { id: "freight_brokerage", label: "FREIGHT · 3PL", color: "#ccff00" },
-  { id: "logistics", label: "LOGISTICS", color: "#00ffff" },
-  { id: "manufacturing", label: "MANUFACTURING", color: "#7c5cff" },
-  { id: "healthcare", label: "HEALTHCARE", color: "#ff3b8a" },
-  { id: "saas", label: "SAAS · TECH", color: "#ccff00" },
-  { id: "ecommerce", label: "E-COMMERCE", color: "#00ffff" },
-  { id: "insurance", label: "INSURANCE", color: "#7c5cff" },
-  { id: "legal", label: "LEGAL", color: "#ff3b8a" },
-  { id: "real_estate", label: "REAL ESTATE", color: "#ccff00" },
-  { id: "professional_services", label: "PRO SERVICES", color: "#00ffff" },
-  { id: "general", label: "GENERAL · OTHER", color: "#ffffff" },
+  { id: "freight_brokerage", label: "FREIGHT · 3PL", color: "#ccff00", compliance: "go_now" },
+  { id: "logistics", label: "LOGISTICS", color: "#00ffff", compliance: "go_now" },
+  { id: "manufacturing", label: "MANUFACTURING", color: "#7c5cff", compliance: "go_now" },
+  { id: "healthcare", label: "HEALTHCARE", color: "#ff3b8a", compliance: "blocked", gate: "HIPAA" },
+  { id: "saas", label: "SAAS · TECH", color: "#ccff00", compliance: "go_now" },
+  { id: "ecommerce", label: "E-COMMERCE", color: "#00ffff", compliance: "go_now" },
+  { id: "insurance", label: "INSURANCE", color: "#7c5cff", compliance: "go_with_tos", gate: "ToS · AI disclosure" },
+  { id: "legal", label: "LEGAL", color: "#ff3b8a", compliance: "go_with_tos", gate: "ToS · UPL carve-out" },
+  { id: "real_estate", label: "REAL ESTATE", color: "#ccff00", compliance: "go_now" },
+  { id: "professional_services", label: "PRO SERVICES", color: "#00ffff", compliance: "go_now" },
+  { id: "general", label: "GENERAL · OTHER", color: "#ffffff", compliance: "go_now" },
 ];
 
 export const INDUSTRY_BY_ID = Object.fromEntries(INDUSTRIES.map((i) => [i.id, i]));

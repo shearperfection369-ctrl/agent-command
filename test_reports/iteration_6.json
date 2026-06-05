@@ -1,0 +1,70 @@
+{
+  "summary": "Iteration 6 — COMPLIANCE · ROUTE tab full verification + iter5 regression. 11/11 backend pytest pass. 100% of compliance frontend testids resolved (1 hero with 14·8·3·3 stats, 8 go_now pills, 3 go_with_tos pills, 3 blocked pills, 4 roadmap phases, 6 universal req rows, 2 filters working). Launch / Health / Leads tabs still render. LinkedIn platform filter still returns 5 posts. /api/compliance/public correctly omits costs/gates/summary/unlock_path. /api/admin/compliance requires admin auth (401 without). HOWEVER: the React span-in-option hydration warning is NOT FULLY FIXED — it now fires from the PHASE filter (filter-phase) instead of platform filter. RCA inside.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "LaunchCampaignPanel · PHASE filter dropdown hydration warning",
+        "issue": "React still warns `In HTML, <span> cannot be a child of <option>. This will cause a hydration error.` The iteration_5 fix patched the PLATFORM <option> (line 307) by inlining a ternary string, but the PHASE <option> on line 299 still uses `PHASE · {p}` — the `{p}` JSX expression is wrapped in a <span> by Emergent's Visual-Edit instrumentation (data-ve-dynamic / x-file-name attrs) which causes the same warning. Live DOM dump confirms: option innerHTML = 'PHASE · <span data-ve-dynamic=\"true\" x-file-name=\"LaunchCampaignPanel\" x-line-number=\"299\">...</span>'. Five PHASE options carry the offending span child.",
+        "affected_selectors": ["[data-testid=\"filter-phase\"] option"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration6.py",
+    "/app/test_reports/pytest/iter6_results.xml"
+  ],
+  "verification_matrix": {
+    "backend": {
+      "GET /api/admin/compliance (no auth)": "PASS — returns 401/403",
+      "GET /api/admin/compliance (admin)": "PASS — summary{14,8,3,3}, 14 industries, ibs counts match, 6 universal_requirements, 4 roadmap phases, 5 headline_principles",
+      "Industry field validation (id/label/status/color/headline/summary/ready_to_sell)": "PASS — all 14 industries",
+      "Specific industry status mapping (8 go_now / 3 blocked / 3 go_with_tos)": "PASS",
+      "Universal req ids (privacy_policy, terms_of_service, dpa, ai_disclosure, soc2, eo_insurance)": "PASS",
+      "Roadmap months [1-2, 3-4, 6, 8+] with actions+unlocks": "PASS",
+      "GET /api/compliance/public (no auth)": "PASS — ready_now=11, coming_soon=3",
+      "Public slice does NOT leak cost_est/gates/tos_must_have/summary/unlock_path": "PASS — keys strictly == {id,label,headline}",
+      "Regression /api/llm-health": "PASS",
+      "Regression /api/admin/system-health": "PASS",
+      "Regression /api/admin/launch/campaign (21 posts)": "PASS"
+    },
+    "frontend": {
+      "Admin login admin@jadeos.ai/JadeOS!2026 → /admin": "PASS",
+      "admin-tab-compliance click → compliance-panel renders": "PASS",
+      "Hero stat tiles 14·8·3·3 visible in compliance-hero": "PASS",
+      "8 go-now pills (freight_brokerage, logistics, manufacturing, ecommerce, real_estate, professional_services, saas, general)": "PASS",
+      "3 go-tos pills (legal, insurance, hr)": "PASS",
+      "3 blocked pills (healthcare, saas_enterprise, finance)": "PASS",
+      "compliance-filter-blocked → 3 industry cards": "PASS",
+      "compliance-filter-go_now → 8 industry cards": "PASS",
+      "4 roadmap cards (1-2, 3-4, 6, 8+)": "PASS",
+      "6 universal requirement rows": "PASS",
+      "Regression: admin-tab-launch → launch-campaign-panel renders": "PASS",
+      "Regression: filter-platform=linkedin → 5 posts": "PASS",
+      "Regression: admin-tab-health → health-panel renders": "PASS",
+      "Regression: admin-tab-leads → table renders": "PASS",
+      "REGRESSION FAIL: React hydration warning '<span> cannot be a child of <option>' still appears in console (now from filter-phase, not filter-platform)": "FAIL"
+    }
+  },
+  "action_items": [
+    "Replace LaunchCampaignPanel.jsx line 299 `<option key={p} value={p}>PHASE · {p}</option>` with a fully-string body so VE instrumentation cannot inject a <span>. e.g.: `<option key={p} value={p}>{p === 'ALL' ? 'PHASE · ALL' : `PHASE · ${p}`}</option>` — mirroring the line-307 platform-option pattern. This eliminates the last span-in-option hydration warning."
+  ],
+  "critical_code_review_comments": [
+    "compliance.py is a clean pure-data module (no I/O, no LLM) — endpoints are deterministic and trivially testable. Good separation.",
+    "/api/compliance/public correctly projects only {id,label,headline} via list-comprehension — no risk of leaking internal cost/gate notes. Verified in test_does_not_leak_costs_or_gates.",
+    "CompliancePanel renders all data via stable testids — excellent for automated regression. Filter state is purely client-side, no server round-trip needed.",
+    "Industry card uses ind.gates / ind.tos_must_have / ind.unlock_path / ind.expansion_path conditionally — handles optional fields cleanly.",
+    "VE-instrumentation gotcha: any JSX child expression like `{var}` inside an <option> will be wrapped in a span and trigger React hydration warning. Pattern to enforce: option children must be a single string literal (ternary or template literal). Worth documenting for future devs.",
+    "server.py is now ~3535 lines (was 3508). Still well past the 700-line guideline. Compliance handler is only 25 lines so the additional impact is minor, but the file split recommendation from iter5 still stands."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration6.py (NEW)"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "93% (14/15 — span-in-option warning unresolved)"},
+  "test_credentials": "admin@jadeos.ai / JadeOS!2026 — confirmed working",
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PHASE-options span-in-option still emits a React hydration warning despite the iter5 fix that only patched the platform filter. RCA is in frontend_issues.integration_issues[0]. The fix is a 1-line edit to LaunchCampaignPanel.jsx:299 — change `PHASE · {p}` to a ternary returning a complete string. Compliance backend is pure-data and deterministic; iter6 backend tests live at /app/backend/tests/test_iteration6.py and run in <2s. Note: backend login returns `access_token` (not `token`) — the iter6 test fixture handles both keys; older iter5 fixture pattern using `r.json()['token']` may break if reused.",
+  "rca of the issue": "Span-in-option warning RCA: Emergent's Visual-Edit instrumentation auto-wraps any non-string JSX child of an <option> in a <span data-ve-dynamic x-file-name=...>. Line 299's `<option>PHASE · {p}</option>` therefore renders as `<option>PHASE · <span>...{p}...</span></option>`, which violates HTML rules and emits the React hydration warning. The iter5 patch on line 307 used a ternary returning a single string, which produces no JSX children for VE to wrap, hence no warning there. Mitigation: apply the same string-only pattern to line 299. Reproduction: login → admin → BIG BANG · LAUNCH tab → open devtools console → warning fires on mount, fires again when interacting with the PHASE select."
+}

@@ -304,7 +304,7 @@ export default function LaunchCampaignPanel() {
                             onChange={(e) => setFilterPlatform(e.target.value)}
                             className="input-tech text-xs py-1.5 w-[180px]"
                         >
-                            {allPlatforms.map((p) => <option key={p} value={p}>{p === "ALL" ? "PLATFORM · ALL" : p}</option>)}
+                            {allPlatforms.map((p) => <option key={p} value={p}>{p === "ALL" ? "PLATFORM · ALL" : p.replace(/_/g, " ").toUpperCase()}</option>)}
                         </select>
                     </div>
                 </div>
