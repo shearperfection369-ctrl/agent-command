@@ -1689,6 +1689,12 @@ from industry_capabilities import build_industry_capabilities, capabilities_for,
 from requirements_kit import build_requirements, requirements_for
 from competitive_moat import build_competitive_moat
 from operations import build_operations
+from integrations import sentry_stub
+from integrations import rag_store as rag_store_mod
+from integrations import client_auth_stub
+
+# Initialize Sentry as early as possible (no-op if SENTRY_DSN is unset).
+sentry_stub.init_sentry()
 
 
 @api.get("/admin/operations")
@@ -1775,10 +1781,198 @@ async def admin_pilot_ticket_delete(ticket_id: str, _: str = Depends(require_adm
     return {"ok": True}
 
 
+# ============================================================
+# INTEGRATIONS SCAFFOLDING — Sentry · RAG · Client Auth · Resend
+# All four are pre-wired so the operator can activate any of them
+# by dropping the matching key into backend/.env. See
+# integrations/__init__.py for the activation matrix.
+# ============================================================
+
+@api.get("/admin/integrations-scaffold")
+async def admin_integrations_scaffold(_: str = Depends(require_admin)):
+    """Status of every wire-in scaffold + activation hint for each."""
+    rag_stats = await rag_store_mod.get_store().stats()
+    afu_queued = await db.auto_followups.count_documents({"status": "queued"})
+    afu_failed = await db.auto_followups.count_documents({"status": "failed"})
+    return {
+        "sentry": sentry_stub.status(),
+        "rag": {**rag_store_mod.status(), **rag_stats},
+        "client_auth": client_auth_stub.status(),
+        "resend": {
+            "configured": bool(RESEND_API_KEY),
+            "sender": RESEND_SENDER,
+            "queued": afu_queued,
+            "failed": afu_failed,
+            "webhook_secret_set": bool(RESEND_WEBHOOK_SECRET),
+            "activate_hint": "Drop RESEND_API_KEY in backend/.env. Queued auto-followups flush automatically on next retry call.",
+        },
+        "scaffold_principle": "Every scaffold ships behind the same API contract production will use. Drop the key, redeploy, done.",
+    }
+
+
+# ---- RAG · per-tenant vector store ---------------------------------------
+
+class RagIngestBody(BaseModel):
+    tenant_id: str
+    title: str
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class RagQueryBody(BaseModel):
+    tenant_id: str
+    question: str
+    k: int = 5
+
+
+@api.post("/rag/ingest")
+async def rag_ingest(body: RagIngestBody, _: str = Depends(require_admin)):
+    """Upsert a document into the per-tenant vector store. Returns the stored doc id."""
+    store = rag_store_mod.get_store()
+    doc = rag_store_mod.RagDoc(
+        id=str(uuid.uuid4()),
+        tenant_id=body.tenant_id,
+        title=body.title,
+        content=body.content,
+        metadata=body.metadata or {},
+    )
+    saved = await store.upsert(doc)
+    # Mirror to mongo so docs survive process restart even on the memory store.
+    await db.rag_docs.update_one(
+        {"id": saved.id},
+        {"$set": {"id": saved.id, "tenant_id": saved.tenant_id, "title": saved.title,
+                  "content": saved.content, "metadata": saved.metadata,
+                  "created_at": _utcnow_iso()}},
+        upsert=True,
+    )
+    return {"id": saved.id, "tenant_id": saved.tenant_id, "title": saved.title}
+
+
+@api.post("/rag/query")
+async def rag_query(body: RagQueryBody):
+    """Per-tenant retrieval. Returns top-k hits with similarity score + citations."""
+    store = rag_store_mod.get_store()
+    hits = await store.query(body.tenant_id, body.question, k=body.k)
+    return {
+        "tenant_id": body.tenant_id,
+        "question": body.question,
+        "provider": store.provider_name,
+        "hits": [
+            {"id": h.doc.id, "title": h.doc.title, "score": h.score,
+             "snippet": h.doc.content[:280], "metadata": h.doc.metadata}
+            for h in hits
+        ],
+    }
+
+
+@api.get("/rag/tenant/{tenant_id}")
+async def rag_list_tenant(tenant_id: str, _: str = Depends(require_admin)):
+    store = rag_store_mod.get_store()
+    docs = await store.list_for_tenant(tenant_id)
+    return {"tenant_id": tenant_id, "count": len(docs),
+            "docs": [{"id": d.id, "title": d.title, "metadata": d.metadata} for d in docs]}
+
+
+@api.delete("/rag/tenant/{tenant_id}/{doc_id}")
+async def rag_delete(tenant_id: str, doc_id: str, _: str = Depends(require_admin)):
+    store = rag_store_mod.get_store()
+    ok = await store.delete(tenant_id, doc_id)
+    await db.rag_docs.delete_one({"id": doc_id, "tenant_id": tenant_id})
+    return {"ok": ok}
+
+
+# ---- Client portal magic-link auth ---------------------------------------
+
+class ClientMagicRequest(BaseModel):
+    email: EmailStr
+    company: Optional[str] = None
+
+
+class ClientVerifyBody(BaseModel):
+    token: str
+
+
+@api.post("/client/auth/request-magic-link")
+async def client_request_magic(body: ClientMagicRequest, request: Request):
+    """Mint a magic link for a client portal user. Email it if Resend is wired,
+    otherwise return the link in the response (preview/dev convenience)."""
+    if _rate_limited(_client_key(request, "client-magic"), max_calls=5, window_s=60):
+        raise HTTPException(429, "Slow down. Try again in a minute.")
+    email = body.email.lower()
+    # Upsert client_users row
+    existing = await db.client_users.find_one({"email": email})
+    if not existing:
+        await db.client_users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "company": body.company or "",
+            "created_at": _utcnow_iso(),
+            "last_seen_at": None,
+        })
+    token, expires = client_auth_stub.mint_magic_token(email)
+    base = PUBLIC_BASE_URL.rstrip("/")
+    magic_url = f"{base}/client/verify?token={token}"
+    out = {"ok": True, "expires": expires, "email_sent": False, "magic_url": None}
+    if _resend_configured():
+        try:
+            await _resend_send({
+                "from": RESEND_SENDER, "to": [email],
+                "subject": "Your JADE OS client portal sign-in link",
+                "html": f"""<p>Hi,</p><p>Click the link below to sign in to your JADE OS client portal. The link expires in {client_auth_stub.MAGIC_TTL_MIN} minutes.</p><p><a href=\"{magic_url}\">Sign in to JADE OS</a></p><p>If you didn't request this, ignore the email.</p>""",
+            })
+            out["email_sent"] = True
+        except Exception as e:
+            log.warning("client_auth · email send failed · returning link in response · %s", e)
+            out["magic_url"] = magic_url
+    else:
+        # Dev / preview convenience: return the link so the operator can click it.
+        out["magic_url"] = magic_url
+    return out
+
+
+@api.post("/client/auth/verify")
+async def client_verify(body: ClientVerifyBody):
+    email = client_auth_stub.verify_magic_token(body.token)
+    if not email:
+        raise HTTPException(400, "Magic link expired or already used.")
+    user = await db.client_users.find_one({"email": email}, {"_id": 0})
+    if not user:
+        # Self-heal: someone clicked a link for an email that got cleared.
+        user = {"id": str(uuid.uuid4()), "email": email, "company": "", "created_at": _utcnow_iso()}
+        await db.client_users.insert_one(user)
+    await db.client_users.update_one({"email": email}, {"$set": {"last_seen_at": _utcnow_iso()}})
+    token, expires = client_auth_stub.mint_session_token(email)
+    return {"token": token, "expires": expires, "user": {"email": user["email"], "company": user.get("company", "")}}
+
+
+def require_client(creds: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    if not creds:
+        raise HTTPException(401, "Missing client token")
+    payload = client_auth_stub.decode_session_token(creds.credentials)
+    if not payload or not payload.get("sub"):
+        raise HTTPException(401, "Invalid or expired client session")
+    return payload["sub"]
+
+
+@api.get("/client/me")
+async def client_me(email: str = Depends(require_client)):
+    user = await db.client_users.find_one({"email": email}, {"_id": 0})
+    if not user:
+        raise HTTPException(404, "User not found")
+    # Light read-only deck: latest 25 agent runs scoped by email + org row if present.
+    org = await db.orgs.find_one({"email": email}, {"_id": 0})
+    runs = await db.agent_runs.find({"email": email}, {"_id": 0}).sort("created_at", -1).limit(25).to_list(25)
+    return {"user": user, "org": org, "runs": runs}
+
+
+
+
+
 @api.get("/admin/competitive-moat")
 async def admin_competitive_moat(_: str = Depends(require_admin)):
     """Six structural moats + five highest-ROI workflows + comparison table + pitch language."""
     return build_competitive_moat()
+
 
 
 @api.get("/competitive-moat/public")

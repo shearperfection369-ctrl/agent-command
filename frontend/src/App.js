@@ -20,8 +20,14 @@ import Logistics from "@/pages/Logistics";
 import PlaybookBuilder from "@/pages/PlaybookBuilder";
 import EmbedReel from "@/pages/EmbedReel";
 import PressKit from "@/pages/PressKit";
+import ClientLogin from "@/pages/ClientLogin";
+import ClientDashboard from "@/pages/ClientDashboard";
 import { MoodPicker } from "@/components/MoodPicker";
 import LlmHealthBanner from "@/components/LlmHealthBanner";
+import { initSentry } from "@/lib/sentry";
+
+// Fire-and-forget Sentry init. No-op if REACT_APP_SENTRY_DSN is unset.
+initSentry();
 
 function Chrome({ children }) {
   const { pathname } = useLocation();
@@ -75,6 +81,9 @@ function App() {
             <Route path="/press" element={<PressKit />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<Dashboard />} />
+            <Route path="/client/login" element={<ClientLogin />} />
+            <Route path="/client/verify" element={<ClientLogin />} />
+            <Route path="/client/dashboard" element={<ClientDashboard />} />
           </Routes>
         </Chrome>
       </BrowserRouter>
