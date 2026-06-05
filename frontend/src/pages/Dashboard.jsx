@@ -8,6 +8,8 @@ import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Bui
 import { INDUSTRIES, SAMPLES } from "../lib/industries";
 import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
 import { SaveActions } from "../components/SaveActions";
+import HealthPanel from "../components/HealthPanel";
+import LaunchCampaignPanel from "../components/LaunchCampaignPanel";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -56,6 +58,8 @@ export default function Dashboard() {
   if (loading) return <div className="min-h-screen bg-console grid place-items-center font-mono-tech text-[#ccff00]">// loading console…</div>;
 
   const TABS = [
+    { id: "health", label: "HEALTH · DIAGNOSTICS", c: "#ff3b8a", n: "" },
+    { id: "launch", label: "BIG BANG · LAUNCH", c: "#ccff00", n: "" },
     { id: "lighthouse", label: "LIGHTHOUSE", c: "#ff3b8a", n: lighthouse.length },
     { id: "leads", label: "LEADS", c: "#ccff00", n: leads.length },
     { id: "playground", label: "PLAYGROUND", c: "#7c5cff", n: "" },
@@ -108,6 +112,8 @@ export default function Dashboard() {
 
       <section className="px-6 lg:px-10 py-10">
         <div className="max-w-[1400px] mx-auto">
+          {tab === "health" && <HealthPanel />}
+          {tab === "launch" && <LaunchCampaignPanel />}
           {tab === "lighthouse" && <LighthousePanel apps={lighthouse} reload={load} />}
           {tab === "leads" && (
             <div className="space-y-6">

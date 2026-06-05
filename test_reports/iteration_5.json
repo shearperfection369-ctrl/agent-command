@@ -1,0 +1,81 @@
+{
+  "summary": "Full backend + frontend verification of Iteration 5 (LLM error classification, HEALTH · DIAGNOSTICS tab, BIG BANG · LAUNCH tab, security headers, login brute-force RL, PDF magic-byte). 14/14 backend pytest pass. All 11 frontend checks pass. LLM is HEALTHY in this run (live probe 2213ms, model claude-sonnet-4-5).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "LaunchCampaignPanel · PLATFORM filter dropdown",
+        "issues": [
+          "React hydration warning in console: '<span> cannot be a child of <option>'. The platform <select> options contain a child <span> tag, which is invalid HTML. Non-blocking (works fine) but should be fixed to silence the React warning. Likely in /app/frontend/src/components/LaunchCampaignPanel.jsx — wrap the platform label in plain text or move the icon outside the option."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration5.py",
+    "/app/test_reports/pytest/iter5_results.xml"
+  ],
+  "verification_matrix": {
+    "backend": {
+      "GET /api/llm-health (public)": "PASS — status=ok, code/message present",
+      "GET /api/admin/system-health (admin)": "PASS — overall/mongo/llm/services/security/counts/disk/auto_followups/needs_action all present; services.llm.configured=true; services.mongo.configured=true",
+      "POST /api/admin/llm-probe (admin)": "PASS — status=healthy, latency_ms + reply present",
+      "GET /api/admin/llm-errors (admin)": "PASS — errors[] by_code{} total_recent present",
+      "GET /api/admin/launch/campaign": "PASS — 21 posts, 4 weeks, 11 platforms; all_posts[].headline/body/hashtags/scheduled_for present",
+      "GET /api/admin/launch/campaign?start_date=2026-03-01": "PASS — first scheduled_for re-scheduled to 2026-03-XX",
+      "GET /api/admin/launch/assets": "PASS — 5 assets with size_mb + url",
+      "GET /api/launch/asset/jadeos_v3_vertical_9x16.mp4 (public)": "PASS — HTTP 200, content-type=video/mp4, content-length >1MB",
+      "GET /api/launch/asset/../etc/passwd": "PASS — 400/404 blocked",
+      "POST /api/auth/login brute force (9x bad creds)": "PASS — 429 hit before 9th attempt",
+      "POST /api/agent/extract-pdf (fake .pdf body, no %PDF magic)": "PASS — 400 with magic-byte message",
+      "Security headers on /api/": "PASS — Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options present",
+      "Regression /api/promo/video?v=3": "PASS — 200 + video/mp4",
+      "Regression /api/admin/self-test": "PASS — endpoint reachable"
+    },
+    "frontend": {
+      "Login as admin@jadeos.ai → /admin": "PASS",
+      "LlmHealthBanner ABSENT on /admin /demo /": "PASS (LLM healthy → banner auto-hides)",
+      "admin-tab-health click → health-panel renders": "PASS",
+      "health-overall-healthy pill": "PASS (system healthy, 2213ms live probe)",
+      "SERVICES matrix shows MongoDB + Universal LLM": "PASS",
+      "SECURITY POSTURE section present": "PASS",
+      "health-probe-btn → health-probe-result within 15s": "PASS (model claude-sonnet-4-5-20250929, reply OK)",
+      "admin-tab-launch click → launch-campaign-panel renders": "PASS",
+      "Stat tiles 21·4·11·5 visible": "PASS",
+      "launch-weeks + launch-posts (≥20 PostCards)": "PASS (21 post-cards)",
+      "launch-assets-section + 5 asset cards + asset-download-jadeos_v3_vertical_9x16.mp4 href contains /api/launch/asset/": "PASS",
+      "copy-post-* click → 'Copied X (Twitter) post' toast": "PASS",
+      "filter-platform=linkedin → 5 posts": "PASS",
+      "filter-phase=REVEAL → 7 posts": "PASS"
+    }
+  },
+  "action_items": [
+    "(Minor / cosmetic) Fix React hydration warning in LaunchCampaignPanel.jsx — the platform <select> has a <span> inside an <option>. Replace the inner span with a plain text label.",
+    "(Optional) The platform filter dropdown only exposes 8 platforms (ALL, x, linkedin, instagram_feed, tiktok, instagram_reel, hackernews, youtube, reddit) but the campaign metadata advertises 11 platforms. Either populate posts for the missing 3 (facebook, youtube_shorts, threads) or update the '11 platforms' stat to reflect platforms with actual posts."
+  ],
+  "critical_code_review_comments": [
+    "classify_llm_error() centralisation is good — single source of truth for budget_exceeded/insufficient_balance/rate_limited/auth_failed/timeout. Error code surfaced via HTTPException.detail.code makes the axios interceptor + SSE error handling trivial.",
+    "SecurityHeadersMiddleware uses setdefault → correct, won't clobber existing headers, and applied via add_middleware so headers attach to ALL responses including 404s. Verified live.",
+    "In-memory rate limit (_RL_BUCKETS) is per-process. With multiple uvicorn workers it would be bypassable. Currently single-worker so fine, but worth a Redis-backed bucket if scaling out.",
+    "_client_key() uses X-Forwarded-For first hop. Behind k8s ingress this is correct; in a different reverse-proxy chain it could be spoofed. Consider trusted-proxy validation if exposed differently.",
+    "PDF magic-byte check is solid (%PDF prefix + denied-patterns /javascript /launch /embeddedfile). Good defense-in-depth.",
+    "/api/launch/asset/{name} correctly rejects '../' path traversal (400/404).",
+    "server.py is now 3508 lines — past the 700-line recommendation. Consider splitting into routers (auth, leads, agents, admin, launch, health, security) for maintainability.",
+    "HealthPanel polls /api/admin/system-health every 30s and LlmHealthBanner polls /api/llm-health every 60s. Both are unauthenticated reads (llm-health) and authenticated (system-health). Public llm-health endpoint is zero-cost and safe."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration5.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (15/15 frontend checks)"},
+  "test_credentials": "admin@jadeos.ai / JadeOS!2026 — confirmed working",
+  "seed_data_creation": "None. Brute-force rate-limit test created 8-10 throwaway login attempts (cleared on backend restart). I restarted backend once via supervisorctl to clear the RL bucket so subsequent frontend login could succeed — important context for next agent.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login brute-force RL bucket is IP-keyed in-memory; running the rate-limit pytest will lock out subsequent logins from the same IP for ~5 min OR until backend restart. The pytest file /app/backend/tests/test_iteration5.py includes the RL test as the last item in TestSecurity so non-auth tests pass first. LLM was healthy in this run (probe 2213ms). All 5 social assets (mp3/mp4/jpg) are served by /api/launch/asset/{name} from /app/static/social/. Campaign endpoint is fully static, LLM-independent. Server.py is 3508 lines — main agent may want to split.",
+  "rca of the issue": "No bugs. One cosmetic React warning surfaced in console (<span> inside <option> in PLATFORM filter) — flagged in action_items."
+}

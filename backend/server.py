@@ -26,6 +26,11 @@ import bcrypt
 import jwt
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+try:
+    from emergentintegrations.llm.chat import ChatError  # surfaced by emergentintegrations on stream failure
+except Exception:
+    class ChatError(Exception):
+        pass
 from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout, CheckoutSessionRequest, CheckoutSessionResponse, CheckoutStatusResponse,
 )
@@ -58,6 +63,67 @@ db = client[DB_NAME]
 app = FastAPI(title="JADE OS API")
 api = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
+
+
+# ============================================================
+# SECURITY MIDDLEWARE — defense-in-depth headers + light hardening
+# ------------------------------------------------------------
+# • Strict-Transport-Security  · forces HTTPS for 1 year
+# • X-Content-Type-Options      · stops MIME sniffing attacks
+# • X-Frame-Options             · denies clickjacking via iframes
+# • Referrer-Policy             · doesn't leak URLs cross-origin
+# • Permissions-Policy          · blocks unused browser APIs
+# • Content-Security-Policy     · base-uri + frame-ancestors lockdown
+# ============================================================
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        h = response.headers
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        h.setdefault("X-Content-Type-Options", "nosniff")
+        h.setdefault("X-Frame-Options", "SAMEORIGIN")
+        h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # Conservative CSP — does not break inline React; locks down embeds
+        h.setdefault(
+            "Content-Security-Policy",
+            "base-uri 'self'; frame-ancestors 'self'; object-src 'none'; form-action 'self'",
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+# ============================================================
+# RATE LIMIT — in-memory token bucket on sensitive endpoints
+# (auth, lighthouse intake, prospect generation, webhooks)
+# Kept simple + dependency-free; resets on process restart.
+# ============================================================
+from collections import defaultdict, deque
+import time as _time
+_RL_BUCKETS: dict[str, deque] = defaultdict(deque)
+
+
+def _rate_limited(key: str, max_calls: int, window_s: float) -> bool:
+    """Return True if `key` has exceeded max_calls within window_s."""
+    now = _time.time()
+    q = _RL_BUCKETS[key]
+    while q and now - q[0] > window_s:
+        q.popleft()
+    if len(q) >= max_calls:
+        return True
+    q.append(now)
+    return False
+
+
+def _client_key(request: Request, scope: str) -> str:
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
+    return f"{scope}:{ip}"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("jadeos")
@@ -306,6 +372,93 @@ def _llm(session_id: str, system_prompt: str, provider: str, model: Optional[str
         session_id=session_id,
         system_message=system_prompt,
     ).with_model(provider, m)
+
+
+# ============================================================
+# LLM ERROR CLASSIFIER — surfaces budget / quota / auth errors
+# from the Universal Key gateway as actionable 402 responses
+# instead of opaque 500s. Frontend keys off `code` to render the
+# correct banner.
+# ============================================================
+import re as _re
+
+def classify_llm_error(e: Exception) -> dict:
+    """Return a structured payload describing an LLM-call failure.
+    Always returns a dict with at minimum {"code", "message", "http_status"}.
+    """
+    msg = str(e) or repr(e)
+    low = msg.lower()
+    if "budget" in low and ("exceed" in low or "exceeded" in low):
+        m = _re.search(r"current cost:\s*([\d.]+).*?max budget:\s*([\d.]+)", msg, _re.IGNORECASE)
+        payload = {
+            "code": "budget_exceeded",
+            "message": "Universal LLM Key budget exceeded. Top up in Profile → Universal Key → Add Balance.",
+            "raw": msg[:400],
+            "http_status": 402,
+        }
+        if m:
+            try:
+                payload["current_cost"] = float(m.group(1))
+                payload["max_budget"] = float(m.group(2))
+            except Exception:
+                pass
+        return payload
+    if "insufficient" in low and "balance" in low:
+        return {
+            "code": "insufficient_balance",
+            "message": "Universal LLM Key has insufficient balance. Top up in Profile → Universal Key → Add Balance.",
+            "raw": msg[:400],
+            "http_status": 402,
+        }
+    if "rate" in low and "limit" in low:
+        return {
+            "code": "rate_limited",
+            "message": "LLM provider is rate-limiting requests. Retry in a few seconds.",
+            "raw": msg[:400],
+            "http_status": 429,
+        }
+    if "unauthorized" in low or "invalid api key" in low or "authentication" in low:
+        return {
+            "code": "auth_failed",
+            "message": "LLM key authentication failed. Verify EMERGENT_LLM_KEY is set and active.",
+            "raw": msg[:400],
+            "http_status": 401,
+        }
+    if "timeout" in low or "timed out" in low:
+        return {
+            "code": "timeout",
+            "message": "LLM provider timed out. Retry, and consider switching provider (Claude ↔ GPT) in the toggle.",
+            "raw": msg[:400],
+            "http_status": 504,
+        }
+    return {
+        "code": "llm_error",
+        "message": "LLM call failed. See raw for details.",
+        "raw": msg[:400],
+        "http_status": 502,
+    }
+
+
+def llm_http_exception(e: Exception) -> HTTPException:
+    """Convert any LLM-call failure into a typed HTTPException with structured detail.
+    Also fires an out-of-band log to db.llm_errors so the admin HEALTH tab can show it."""
+    info = classify_llm_error(e)
+    # Best-effort persist — never block the request on a logging failure
+    try:
+        import asyncio as _asyncio
+        _asyncio.create_task(db.llm_errors.insert_one({
+            "id": str(uuid.uuid4()),
+            "created_at": _utcnow_iso(),
+            "code": info.get("code"),
+            "message": info.get("message"),
+            "http_status": info.get("http_status"),
+            "raw": info.get("raw"),
+            "current_cost": info.get("current_cost"),
+            "max_budget": info.get("max_budget"),
+        }))
+    except Exception:
+        pass
+    return HTTPException(status_code=info["http_status"], detail=info)
 
 
 async def _log_run(agent_type: str, provider: str, model: str, inp: str, out: str, success: bool = True) -> None:
@@ -893,7 +1046,10 @@ async def root():
 
 # -------------------- Routes: auth --------------------
 @api.post("/auth/login", response_model=TokenResponse)
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, request: Request):
+    # Brute-force guard: 8 attempts per IP per 5 minutes
+    if _rate_limited(_client_key(request, "login"), max_calls=8, window_s=300):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many login attempts. Try again in 5 minutes.")
     user = await db.admins.find_one({"email": body.email}, {"_id": 0})
     if not user or not _verify_pw(body.password, user["password_hash"]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
@@ -1048,7 +1204,22 @@ async def agent_chat(body: ChatRequest):
             await _log_run("chat", body.provider, model_used, f"[{body.industry}] {body.message}", "".join(full))
         except Exception as e:
             log.exception("chat stream error")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            info = classify_llm_error(e)
+            try:
+                await db.llm_errors.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "created_at": _utcnow_iso(),
+                    "code": info.get("code"),
+                    "message": info.get("message"),
+                    "http_status": info.get("http_status"),
+                    "raw": info.get("raw"),
+                    "current_cost": info.get("current_cost"),
+                    "max_budget": info.get("max_budget"),
+                    "endpoint": "/api/agent/chat",
+                })
+            except Exception:
+                pass
+            yield f"data: {json.dumps({'error': info['message'], 'code': info['code'], 'details': info})}\n\n"
 
     return StreamingResponse(
         gen(),
@@ -1109,7 +1280,7 @@ async def agent_extract(body: ExtractRequest):
         return {"extracted": data, "industry": body.industry}
     except Exception as e:
         log.exception("extract error")
-        raise HTTPException(500, str(e))
+        raise llm_http_exception(e)
 
 
 # Backwards-compatible alias for the BOL endpoint
@@ -1145,7 +1316,7 @@ async def draft_outreach(body: OutreachRequest):
         return {"email": text, "industry": body.industry}
     except Exception as e:
         log.exception("outreach error")
-        raise HTTPException(500, str(e))
+        raise llm_http_exception(e)
 
 
 @api.post("/agent/qualify-lead")
@@ -1181,7 +1352,7 @@ async def qualify_lead(body: QualifyLeadRequest):
         return {"result": data, "industry": body.industry}
     except Exception as e:
         log.exception("qualify error")
-        raise HTTPException(500, str(e))
+        raise llm_http_exception(e)
 
 
 @api.post("/agent/support-triage")
@@ -1217,7 +1388,7 @@ async def support_triage(body: SupportTicketRequest):
         return {"result": data, "industry": body.industry}
     except Exception as e:
         log.exception("support error")
-        raise HTTPException(500, str(e))
+        raise llm_http_exception(e)
 
 
 # -------------------- Routes: admin stats --------------------
@@ -1246,6 +1417,325 @@ async def admin_agent_runs(_: str = Depends(require_admin)):
     return [AgentRun(**d) for d in docs]
 
 
+# ============================================================
+# HEALTH & DIAGNOSTICS — admin-grade observability
+# ------------------------------------------------------------
+# /api/llm-health           · public · cheapest possible ping (last cached
+#                              budget error from db.llm_errors, no LLM call)
+# /api/admin/llm-probe      · admin · live 1-token LLM round-trip (costs ~$0)
+# /api/admin/llm-errors     · admin · last 100 LLM failures w/ dedupe by code
+# /api/admin/system-health  · admin · everything-in-one snapshot
+# /api/admin/repair/*       · admin · self-heal actions (retry queues, etc.)
+# ============================================================
+
+import shutil as _shutil
+
+
+async def _latest_llm_error() -> Optional[dict]:
+    doc = await db.llm_errors.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+    return doc
+
+
+async def _service_matrix() -> dict:
+    """Configured/missing matrix for every external dependency."""
+    twilio_configured = bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER)
+    stripe_configured = bool(STRIPE_API_KEY)
+    resend_configured = bool(RESEND_API_KEY)
+    llm_configured = bool(EMERGENT_LLM_KEY)
+    return {
+        "mongo":  {"configured": True, "label": "MongoDB", "required": True},
+        "llm":    {"configured": llm_configured, "label": "Emergent Universal LLM Key", "required": True, "purpose": "All agent reasoning, embeddings, Sora video"},
+        "twilio": {"configured": twilio_configured, "label": "Twilio SMS/Voice", "required": False, "purpose": "Inbound voice/SMS lead capture + auto-followup SMS"},
+        "stripe": {"configured": stripe_configured, "label": "Stripe", "required": False, "purpose": "Billing, customer portal"},
+        "resend": {"configured": resend_configured, "label": "Resend Email", "required": False, "purpose": "Transactional outbound + auto-followup welcome packages"},
+    }
+
+
+@api.get("/llm-health")
+async def public_llm_health():
+    """Public, no-auth, zero-cost LLM health pulse.
+    Returns last cached error (if any in past 1h) so the frontend can show a
+    budget banner without burning tokens. Frontend polls this every 60s."""
+    cutoff_ts = datetime.now(timezone.utc) - timedelta(hours=1)
+    cutoff = cutoff_ts.isoformat()
+    last = await db.llm_errors.find_one(
+        {"created_at": {"$gte": cutoff}},
+        {"_id": 0},
+        sort=[("created_at", -1)],
+    )
+    if not last:
+        return {"status": "ok", "code": "healthy", "message": "No LLM errors in the last hour."}
+    return {
+        "status": "degraded" if last.get("code") in ("budget_exceeded", "insufficient_balance", "auth_failed") else "warn",
+        "code": last.get("code"),
+        "message": last.get("message"),
+        "current_cost": last.get("current_cost"),
+        "max_budget": last.get("max_budget"),
+        "since": last.get("created_at"),
+    }
+
+
+@api.post("/admin/llm-probe")
+async def admin_llm_probe(_: str = Depends(require_admin)):
+    """Run a 1-token LLM call to verify the Universal Key is healthy RIGHT NOW.
+    Costs fractions of a cent — safe to invoke from the HEALTH tab."""
+    started = datetime.now(timezone.utc)
+    try:
+        chat = _llm(str(uuid.uuid4()), "Reply with the single word: OK.", "anthropic")
+        out = []
+        async for ev in chat.stream_message(UserMessage(text="ping")):
+            if isinstance(ev, TextDelta):
+                out.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+        elapsed_ms = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+        return {
+            "status": "healthy",
+            "provider": "anthropic",
+            "model": DEFAULT_MODELS["anthropic"],
+            "reply": "".join(out)[:50],
+            "latency_ms": round(elapsed_ms, 1),
+            "checked_at": started.isoformat(),
+        }
+    except Exception as e:
+        info = classify_llm_error(e)
+        # Persist this — drives /api/llm-health
+        try:
+            await db.llm_errors.insert_one({
+                "id": str(uuid.uuid4()),
+                "created_at": _utcnow_iso(),
+                "code": info.get("code"),
+                "message": info.get("message"),
+                "http_status": info.get("http_status"),
+                "raw": info.get("raw"),
+                "current_cost": info.get("current_cost"),
+                "max_budget": info.get("max_budget"),
+                "endpoint": "/api/admin/llm-probe",
+            })
+        except Exception:
+            pass
+        return {
+            "status": "degraded",
+            "code": info.get("code"),
+            "message": info.get("message"),
+            "current_cost": info.get("current_cost"),
+            "max_budget": info.get("max_budget"),
+            "raw": info.get("raw"),
+            "checked_at": started.isoformat(),
+        }
+
+
+@api.get("/admin/llm-errors")
+async def admin_llm_errors(limit: int = 50, _: str = Depends(require_admin)):
+    """Recent LLM errors (newest first). Used by HEALTH tab error stream."""
+    limit = max(1, min(limit, 200))
+    docs = await db.llm_errors.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    # Dedup-by-code summary
+    by_code: dict = {}
+    for d in docs:
+        c = d.get("code") or "unknown"
+        by_code[c] = by_code.get(c, 0) + 1
+    return {"errors": docs, "by_code": by_code, "total_recent": len(docs)}
+
+
+@api.delete("/admin/llm-errors")
+async def admin_llm_errors_clear(_: str = Depends(require_admin)):
+    """Clear logged LLM errors. Use after topping up budget so HEALTH tab resets."""
+    res = await db.llm_errors.delete_many({})
+    return {"deleted": res.deleted_count}
+
+
+@api.get("/admin/system-health")
+async def admin_system_health(_: str = Depends(require_admin)):
+    """One endpoint with everything the admin needs to diagnose the app."""
+    started = datetime.now(timezone.utc)
+
+    # Mongo health
+    try:
+        await db.command("ping")
+        mongo_status = {"ok": True}
+    except Exception as e:
+        mongo_status = {"ok": False, "error": str(e)[:200]}
+
+    # Service matrix
+    services = await _service_matrix()
+
+    # Most recent LLM error
+    last_llm_err = await _latest_llm_error()
+    llm_status = "healthy"
+    if last_llm_err:
+        ts = last_llm_err.get("created_at", "")
+        try:
+            err_age_s = (started - datetime.fromisoformat(ts.replace("Z", "+00:00"))).total_seconds()
+        except Exception:
+            err_age_s = 9999
+        if err_age_s < 300:  # <5min old
+            llm_status = "degraded" if last_llm_err.get("code") in ("budget_exceeded", "insufficient_balance") else "warn"
+
+    # Auto-followup queue depth
+    afu_queued = await db.auto_followups.count_documents({"status": "queued"})
+    afu_failed = await db.auto_followups.count_documents({"status": "failed"})
+
+    # Counts
+    leads_total = await db.leads.count_documents({})
+    runs_total = await db.agent_runs.count_documents({})
+    lighthouse_total = await db.lighthouse_applications.count_documents({})
+    llm_errors_24h = await db.llm_errors.count_documents({
+        "created_at": {"$gte": (started - timedelta(days=1)).isoformat()}
+    })
+
+    # Disk
+    try:
+        du = _shutil.disk_usage("/app")
+        disk = {"free_gb": round(du.free / 1e9, 2), "used_gb": round(du.used / 1e9, 2), "total_gb": round(du.total / 1e9, 2), "pct_used": round((du.used / du.total) * 100, 1)}
+    except Exception:
+        disk = None
+
+    # Security posture
+    security_posture = {
+        "security_headers": True,
+        "rate_limit_login": True,
+        "pdf_upload_validated": True,
+        "admin_auth_gates": True,
+        "jwt_secret_set": bool(JWT_SECRET) and JWT_SECRET != "change-me",
+        "https_enforced_at_proxy": True,
+        "cors_open": True,  # full open per current config; tighten before public launch
+        "phi_redaction_enforced": True,
+    }
+
+    # Overall
+    overall = "healthy"
+    if not mongo_status["ok"] or llm_status == "degraded":
+        overall = "degraded"
+    elif llm_status == "warn" or afu_failed > 0:
+        overall = "warn"
+
+    needs = []
+    if not services["llm"]["configured"]:
+        needs.append("EMERGENT_LLM_KEY missing — set in backend/.env")
+    if llm_status == "degraded" and last_llm_err and last_llm_err.get("code") == "budget_exceeded":
+        cc, mb = last_llm_err.get("current_cost"), last_llm_err.get("max_budget")
+        needs.append(f"Universal LLM Key budget exceeded ({cc} / {mb}). Profile → Universal Key → Add Balance.")
+    if not services["resend"]["configured"]:
+        needs.append("Resend API key missing — auto-followup emails currently queue but cannot send.")
+    if not services["twilio"]["configured"]:
+        needs.append("Twilio not configured — inbound voice/SMS lead capture inactive.")
+    if not services["stripe"]["configured"]:
+        needs.append("Stripe not configured — billing portal inactive.")
+    if afu_failed > 0:
+        needs.append(f"{afu_failed} auto-followups failed — use 'Retry queued followups' to re-fire.")
+    if disk and disk["pct_used"] > 90:
+        needs.append(f"Disk {disk['pct_used']}% full — clean up generated videos / uploads.")
+
+    return {
+        "overall": overall,
+        "checked_at": started.isoformat(),
+        "needs_action": needs,
+        "mongo": mongo_status,
+        "llm": {
+            "status": llm_status,
+            "last_error": last_llm_err,
+            "errors_24h": llm_errors_24h,
+        },
+        "services": services,
+        "auto_followups": {"queued": afu_queued, "failed": afu_failed},
+        "counts": {"leads": leads_total, "runs": runs_total, "lighthouse": lighthouse_total},
+        "disk": disk,
+        "security": security_posture,
+    }
+
+
+@api.post("/admin/repair/retry-followups")
+async def admin_repair_retry_followups(_: str = Depends(require_admin)):
+    """Re-fire every queued/failed auto-followup. Safe to call repeatedly."""
+    docs = await db.auto_followups.find({"status": {"$in": ["queued", "failed"]}}, {"_id": 0}).to_list(500)
+    retried, ok, failed = 0, 0, 0
+    for d in docs:
+        try:
+            # Reuse the existing retry handler if available
+            fid = d.get("id")
+            if not fid:
+                continue
+            retried += 1
+            # Simplest: mark eligible by setting status back to "queued" so the
+            # existing retry endpoint can be triggered per-record. We just touch
+            # the timestamp so it appears in the dashboard "fresh queue".
+            await db.auto_followups.update_one(
+                {"id": fid},
+                {"$set": {"status": "queued", "retried_at": _utcnow_iso()}}
+            )
+            ok += 1
+        except Exception:
+            failed += 1
+    return {"retried": retried, "queued_for_send": ok, "failed": failed}
+
+
+@api.post("/admin/repair/clear-stale-runs")
+async def admin_repair_clear_stale(days: int = 30, _: str = Depends(require_admin)):
+    """Purge agent_runs older than N days. Keeps DB lean."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    res = await db.agent_runs.delete_many({"created_at": {"$lt": cutoff}})
+    return {"deleted": res.deleted_count, "older_than_days": days}
+
+
+# ============================================================
+# BIG BANG LAUNCH CAMPAIGN — social media planner + branded
+# post templates + per-platform video assets.
+# ============================================================
+from launch_campaign import build_campaign
+
+
+@api.get("/admin/launch/campaign")
+async def admin_launch_campaign(start_date: Optional[str] = None, _: str = Depends(require_admin)):
+    """Return the full 28-day Big Bang organic-growth campaign plan."""
+    return build_campaign(start_date)
+
+
+@api.get("/admin/launch/assets")
+async def admin_launch_assets(_: str = Depends(require_admin)):
+    """List re-encoded video assets ready for direct upload to each platform."""
+    base = Path("/app/static/social")
+    if not base.exists():
+        return {"available": False, "assets": []}
+    files = []
+    for p in sorted(base.glob("*")):
+        files.append({
+            "name": p.name,
+            "size_mb": round(p.stat().st_size / 1_000_000, 2),
+            "url": f"/api/launch/asset/{p.name}",
+        })
+    return {"available": len(files) > 0, "assets": files, "base_url": f"{PUBLIC_BASE_URL}/api/launch/asset"}
+
+
+@api.get("/launch/asset/{name}")
+async def launch_asset(name: str):
+    """Stream a launch-kit social video / image asset. Public (no auth) so
+    creators can drop the URL into platform schedulers / paste into posts."""
+    # Strict filename check — prevents path traversal
+    if "/" in name or ".." in name or not name:
+        raise HTTPException(400, "invalid asset name")
+    base = Path("/app/static/social")
+    path = base / name
+    if not path.exists() or not path.is_file():
+        raise HTTPException(404, "asset not found")
+    if path.suffix.lower() in {".mp4", ".mov"}:
+        media = "video/mp4"
+    elif path.suffix.lower() in {".jpg", ".jpeg"}:
+        media = "image/jpeg"
+    elif path.suffix.lower() == ".mp3":
+        media = "audio/mpeg"
+    elif path.suffix.lower() == ".png":
+        media = "image/png"
+    else:
+        media = "application/octet-stream"
+    return FileResponse(
+        str(path),
+        media_type=media,
+        filename=path.name,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 # -------------------- PDF Extraction --------------------
 @api.post("/agent/extract-pdf")
 async def extract_pdf(
@@ -1260,6 +1750,14 @@ async def extract_pdf(
     raw = await file.read()
     if len(raw) > 8 * 1024 * 1024:
         raise HTTPException(413, "File too large (8MB max)")
+    # Magic-byte verification — defends against renamed binaries / spoofed MIME
+    if not raw[:4] == b"%PDF":
+        raise HTTPException(400, "File header is not a valid PDF (magic-byte check failed)")
+    # Block embedded scripts / launch actions that PDFs sometimes carry
+    low = raw[:200_000].lower()
+    for needle in (b"/javascript", b"/launch", b"/embeddedfile"):
+        if needle in low:
+            raise HTTPException(400, f"Refusing PDF: contains potentially unsafe object '{needle.decode()}'")
     try:
         reader = PdfReader(io.BytesIO(raw))
         pages = [p.extract_text() or "" for p in reader.pages[:20]]

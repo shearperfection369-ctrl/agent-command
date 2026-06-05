@@ -20,12 +20,14 @@ import PlaybookBuilder from "@/pages/PlaybookBuilder";
 import EmbedReel from "@/pages/EmbedReel";
 import PressKit from "@/pages/PressKit";
 import { MoodPicker } from "@/components/MoodPicker";
+import LlmHealthBanner from "@/components/LlmHealthBanner";
 
 function Chrome({ children }) {
   const { pathname } = useLocation();
   const bare = pathname.startsWith("/embed/");
   return (
     <>
+      {!bare && <LlmHealthBanner />}
       {!bare && <Nav />}
       {children}
       {!bare && <Footer />}

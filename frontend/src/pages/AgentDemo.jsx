@@ -180,7 +180,23 @@ function ChatPanel({ provider, industry }) {
                 return copy;
               });
             }
-            if (j.error) toast.error(j.error);
+            if (j.error) {
+              if (j.code === "budget_exceeded" || j.code === "insufficient_balance") {
+                toast.error(j.error, {
+                  duration: 8000,
+                  action: { label: "OPEN HEALTH", onClick: () => { window.location.href = "/admin"; } },
+                });
+              } else {
+                toast.error(j.error);
+              }
+              // Replace the streaming placeholder with a clear error message so
+              // the chat doesn't look like it silently froze.
+              setMsgs((arr) => {
+                const copy = [...arr];
+                copy[copy.length - 1] = { role: "jade", text: `// ${j.error}` };
+                return copy;
+              });
+            }
           } catch {}
         }
       }
