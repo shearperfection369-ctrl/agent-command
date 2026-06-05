@@ -5,6 +5,7 @@ import { api, API_BASE } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { INDUSTRIES, sampleFor } from "../lib/industries";
 import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
+import { SaveActions } from "../components/SaveActions";
 
 const TABS = [
   { id: "chat", label: "OPS CO-PILOT", icon: ChatCircle, color: "#ccff00" },
@@ -334,7 +335,10 @@ function ExtractPanel({ provider, industry }) {
       </div>
       <div className="deck-card p-6 relative" data-testid="extract-output-panel">
         <CornerBrackets />
-        <div className="mono-label text-[#ccff00] mb-4">OUTPUT · STRUCTURED JSON</div>
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <div className="mono-label text-[#ccff00]">OUTPUT · STRUCTURED JSON</div>
+          {result && <SaveActions data={result} kind="json" filename={`jadeos-extract-${industry}`} />}
+        </div>
         {!result && !loading && <div className="font-mono-tech text-xs text-white/40">// awaiting input…</div>}
         {loading && <div className="font-mono-tech text-xs text-[#00ffff] animate-pulse">// parsing tape…</div>}
         {result && (
@@ -413,9 +417,12 @@ function OutreachPanel({ provider, industry }) {
       </div>
       <div className="deck-card p-6 relative" data-testid="outreach-output-panel">
         <CornerBrackets />
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <span className="mono-label text-[#ccff00]">OUTPUT · DRAFT EMAIL</span>
-          {email && <button data-testid="outreach-copy-btn" onClick={copy} className="mono-label text-[#00ffff] hover:text-[#ccff00]">{copied ? "✓ COPIED" : "COPY"}</button>}
+          <div className="flex items-center gap-3">
+            {email && <SaveActions data={email} kind="txt" filename={`jadeos-outreach-${industry}`} />}
+            {email && <button data-testid="outreach-copy-btn" onClick={copy} className="mono-label text-[#00ffff] hover:text-[#ccff00]">{copied ? "✓ COPIED" : "COPY"}</button>}
+          </div>
         </div>
         {!email && !loading && <div className="font-mono-tech text-xs text-white/40">// awaiting input…</div>}
         {loading && <div className="font-mono-tech text-xs text-[#7c5cff] animate-pulse">// composing tape…</div>}
@@ -467,7 +474,10 @@ function QualifyPanel({ provider, industry }) {
       </div>
       <div className="deck-card p-6 relative" data-testid="qualify-output-panel">
         <CornerBrackets />
-        <div className="mono-label text-[#ccff00] mb-4">OUTPUT · QUALIFICATION</div>
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <div className="mono-label text-[#ccff00]">OUTPUT · QUALIFICATION</div>
+          {result && !result.parse_error && <SaveActions data={result} kind="json" filename={`jadeos-qualify-${industry}`} />}
+        </div>
         {!result && !loading && <div className="font-mono-tech text-xs text-white/40">// awaiting input…</div>}
         {loading && <div className="font-mono-tech text-xs text-[#ff3b8a] animate-pulse">// scoring…</div>}
         {result && !result.parse_error && (
@@ -531,7 +541,10 @@ function SupportPanel({ provider, industry }) {
       </div>
       <div className="deck-card p-6 relative" data-testid="support-output-panel">
         <CornerBrackets />
-        <div className="mono-label text-[#00ffff] mb-4">OUTPUT · TRIAGE RESULT</div>
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <div className="mono-label text-[#00ffff]">OUTPUT · TRIAGE RESULT</div>
+          {result && !result.parse_error && <SaveActions data={result} kind="json" filename={`jadeos-triage-${industry}`} />}
+        </div>
         {!result && !loading && <div className="font-mono-tech text-xs text-white/40">// awaiting input…</div>}
         {loading && <div className="font-mono-tech text-xs text-[#ccff00] animate-pulse">// reading the tape…</div>}
         {result && !result.parse_error && (

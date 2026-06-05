@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ArrowRight, Plus, TrashSimple, ArrowLeft } from "@/lib/icons";
 import { api } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
+import { SaveActions } from "../components/SaveActions";
 
 const STEP_KINDS = [
   { id: "extract", label: "DATA EXTRACTION", c: "#00ffff" },
@@ -176,9 +177,12 @@ export default function PlaybookBuilder() {
             {testResult && (
               <div className="deck-card p-6 relative" data-testid="builder-test-output">
                 <CornerBrackets />
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                   <div className="mono-label text-[#ccff00]">TEST RESULT</div>
-                  <span className="mono-label text-white/40">{testResult.elapsed_ms}ms · {testResult.steps?.length} steps</span>
+                  <div className="flex items-center gap-3">
+                    <SaveActions data={testResult} kind="json" filename={`jadeos-playbook-${name?.replace(/\s+/g, "_") || "result"}`} />
+                    <span className="mono-label text-white/40">{testResult.elapsed_ms}ms · {testResult.steps?.length} steps</span>
+                  </div>
                 </div>
                 <div className="space-y-3">
                   {testResult.steps?.map((st, i) => (

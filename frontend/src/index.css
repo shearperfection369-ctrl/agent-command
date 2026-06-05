@@ -73,9 +73,9 @@ html, body, #root {
 }
 
 /* Backgrounds */
-.bg-console { background: #02030a; }
-.bg-console-2 { background: linear-gradient(180deg, #02030a 0%, #06081a 100%); }
-.bg-card-deep { background: #0a0c18; }
+.bg-console { background: var(--console-black); }
+.bg-console-2 { background: linear-gradient(180deg, var(--console-black) 0%, var(--console-black-2) 100%); }
+.bg-card-deep { background: var(--console-black-2); }
 
 /* Grid backdrop */
 .grid-bg {
@@ -516,7 +516,7 @@ html[data-theme="contrast"] .ambient::before { display: none; }
  * ============================================================ */
 .mood-picker {
     position: fixed;
-    bottom: 18px; right: 18px;
+    bottom: 18px; left: 18px;
     z-index: 60;
     background: var(--console-black-2, #06081a);
     border: 1px solid var(--border-soft);

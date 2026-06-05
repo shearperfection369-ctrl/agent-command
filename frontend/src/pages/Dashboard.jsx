@@ -7,6 +7,7 @@ import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { ArrowsClockwise, Users, ChartBar, Robot, Clock, Webhooks, Database, Building, TrashSimple, Plus, Lightning, EnvelopeSimple } from "@/lib/icons";
 import { INDUSTRIES, SAMPLES } from "../lib/industries";
 import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
+import { SaveActions } from "../components/SaveActions";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -531,6 +532,11 @@ function SelfTestPanel() {
             <SummaryStat k="FAIL" v={report.summary.fail} c="#ff3b8a" />
             <SummaryStat k="SKIP" v={report.summary.skip} c="#7c5cff" />
             <SummaryStat k="ELAPSED" v={`${(report.summary.total_ms / 1000).toFixed(2)}s`} c="#00ffff" />
+          </div>
+        )}
+        {report?.results && (
+          <div className="mt-5 flex justify-end">
+            <SaveActions data={report} kind="json" filename="jadeos-selftest" />
           </div>
         )}
       </div>
@@ -1147,6 +1153,16 @@ function EmailDraftModal({ data, onClose, onSent }) {
           </div>
           <button onClick={onClose} className="btn-ghost text-xs px-3" data-testid="email-draft-close">✕ CLOSE</button>
         </div>
+
+        {pkg && (
+          <div className="px-6 pt-3 pb-1 flex flex-wrap items-center justify-end gap-2 border-b border-white/5">
+            <SaveActions
+              data={`SUBJECT: ${pkg.subject}\n\n${pkg.body}${pkg.talking_points?.length ? "\n\nTALKING POINTS\n" + pkg.talking_points.map((t) => `• ${t}`).join("\n") : ""}${pkg.ps ? "\n\nPS: " + pkg.ps : ""}`}
+              kind="txt"
+              filename={`jadeos-package-${prospect.company?.replace(/\s+/g, "_") || "prospect"}`}
+            />
+          </div>
+        )}
 
         {loading && (
           <div className="p-12 flex justify-center" data-testid="email-draft-loading">
