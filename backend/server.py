@@ -5384,43 +5384,54 @@ async def workbench_phase_step(n: int, body: ow_mod.PhaseStepUpdate, admin: str 
 
 @api.post("/workbench/labs/op-01/run")
 async def lab_op01_run(_: str = Depends(require_admin)):
-    """LLM market-analysis run · produces source-cited PDF."""
+    """LLM market-analysis run · produces source-cited PDF.
+
+    Robust to LLM failures: if the LLM call exceeds ~45s or errors, falls back
+    to the curated deterministic MARKET_ANALYSIS_FALLBACK_SECTIONS so the user
+    always gets a real PDF.
+    """
     run_id = str(uuid.uuid4())
     started = _utcnow_iso()
+    sections = None
+    source = "llm"
+    fallback_reason = None
     try:
         chat = _llm(f"op01-{run_id}", ow_mod.MARKET_ANALYSIS_SYS, "anthropic")
-        raw: List[str] = []
-        async for ev in chat.stream_message(UserMessage(text="Generate the deep-dive on the Minnesota freight industry per the spec.")):
-            if isinstance(ev, TextDelta):
-                raw.append(ev.content)
-            elif isinstance(ev, StreamDone):
-                break
-        text = "".join(raw)
+        async def _gen():
+            raw: List[str] = []
+            async for ev in chat.stream_message(UserMessage(text="Generate the deep-dive on the Minnesota freight industry per the spec.")):
+                if isinstance(ev, TextDelta):
+                    raw.append(ev.content)
+                elif isinstance(ev, StreamDone):
+                    break
+            return "".join(raw)
+        text = await asyncio.wait_for(_gen(), timeout=45.0)
         data = json.loads(_strip_json(text))
         sections = data.get("sections") or []
         if not sections:
-            raise HTTPException(500, "LLM produced no sections")
-        out_dir = "/app/backend/static_workbench"
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = f"{out_dir}/op01_{run_id}.pdf"
-        ow_mod.generate_market_analysis_pdf(sections, out_path)
-        rec = {
-            "id": run_id, "op_id": "OP-01", "started_at": started,
-            "completed_at": _utcnow_iso(),
-            "sections": sections, "pdf_path": out_path,
-            "pdf_download_url": f"/api/workbench/labs/op-01/download/{run_id}",
-            "section_count": len(sections), "status": "completed",
-        }
-        await db.workbench_runs.insert_one(rec)
-        rec.pop("_id", None)
-        await _audit("admin", "workbench.lab.completed", "lab_run", target_id=run_id,
-                     metadata={"op_id": "OP-01", "sections": len(sections)})
-        return rec
-    except HTTPException:
-        raise
-    except Exception as e:
-        info = classify_llm_error(e)
-        raise HTTPException(info.get("http_status", 500), info.get("message", str(e)))
+            raise ValueError("LLM produced no sections")
+    except (asyncio.TimeoutError, Exception) as e:
+        sections = ow_mod.MARKET_ANALYSIS_FALLBACK_SECTIONS
+        source = "deterministic_fallback"
+        fallback_reason = "llm_timeout_45s" if isinstance(e, asyncio.TimeoutError) else f"llm_error: {str(e)[:120]}"
+
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = f"{out_dir}/op01_{run_id}.pdf"
+    ow_mod.generate_market_analysis_pdf(sections, out_path)
+    rec = {
+        "id": run_id, "op_id": "OP-01", "started_at": started,
+        "completed_at": _utcnow_iso(),
+        "sections": sections, "pdf_path": out_path,
+        "pdf_download_url": f"/api/workbench/labs/op-01/download/{run_id}",
+        "section_count": len(sections), "status": "completed",
+        "source": source, "fallback_reason": fallback_reason,
+    }
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    await _audit("admin", "workbench.lab.completed", "lab_run", target_id=run_id,
+                 metadata={"op_id": "OP-01", "sections": len(sections), "source": source})
+    return rec
 
 
 @api.get("/workbench/labs/op-01/download/{run_id}")
