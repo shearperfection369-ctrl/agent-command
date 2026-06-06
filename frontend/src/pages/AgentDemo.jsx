@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, User, ArrowsClockwise, Lifebuoy } from "@/lib/icons";
+import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, User, ArrowsClockwise, Lifebuoy, Truck } from "@/lib/icons";
 import { api, API_BASE } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { INDUSTRIES, sampleFor } from "../lib/industries";
 import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
 import { SaveActions } from "../components/SaveActions";
+import TruckerAIPanel from "../components/TruckerAIPanel";
 
 const TABS = [
   { id: "chat", label: "OPS CO-PILOT", icon: ChatCircle, color: "#ccff00" },
@@ -13,7 +14,42 @@ const TABS = [
   { id: "outreach", label: "OUTREACH DRAFT", icon: EnvelopeSimple, color: "#7c5cff" },
   { id: "qualify", label: "LEAD QUAL", icon: Target, color: "#ff3b8a" },
   { id: "support", label: "SUPPORT TRIAGE", icon: Lifebuoy, color: "#ccff00" },
+  { id: "trucker", label: "TRUCKER · DRIVER OPS", icon: Truck, color: "#00ffff" },
 ];
+
+function SystemStatusStrip() {
+  const [stat, setStat] = useState(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let cancel = false;
+    const load = async () => {
+      try {
+        const { data } = await api.get("/llm-health");
+        if (!cancel) setStat(data);
+      } catch {}
+    };
+    load();
+    const i = setInterval(() => { setTick((t) => t + 1); load(); }, 30000);
+    return () => { cancel = true; clearInterval(i); };
+  }, []);
+  const t = new Date();
+  return (
+    <div className="border-y border-[#ccff0022] bg-[#ccff0008] px-6 lg:px-10 py-2 grid grid-cols-[auto_1fr_auto] gap-4 items-center" data-testid="system-status-strip">
+      <div className="flex items-center gap-2">
+        <span className="relative inline-flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-[#ccff00] animate-ping opacity-50"></span><span className="relative w-2 h-2 rounded-full bg-[#ccff00]"></span></span>
+        <span className="mono-label text-[10px] text-[#ccff00]">SYSTEM · LIVE</span>
+      </div>
+      <div className="font-mono-tech text-[10px] text-white/65 flex flex-wrap gap-4 justify-center">
+        {stat?.providers ? Object.entries(stat.providers).slice(0, 3).map(([k, v]) => (
+          <span key={k}>{k}<span className="text-white/40 ml-1">·</span> <span style={{ color: v?.ok || v?.healthy ? "#ccff00" : "#ffce4f" }}>{v?.ok || v?.healthy ? "OK" : "DEGRADED"}</span></span>
+        )) : <span className="text-white/45">probing providers…</span>}
+        <span className="text-white/40">{t.toUTCString().slice(17, 25)} UTC</span>
+        <span className="text-white/40">tick · {tick}</span>
+      </div>
+      <span className="mono-label text-[10px] text-white/40">▸ all data sources verifiable</span>
+    </div>
+  );
+}
 
 export default function AgentDemo() {
   const [tab, setTab] = useState("chat");
@@ -22,6 +58,7 @@ export default function AgentDemo() {
 
   return (
     <div className="bg-console min-h-screen">
+      <SystemStatusStrip />
       {/* Header */}
       <section className="border-b border-white/5 px-6 lg:px-10 py-10 grid-bg-tight relative">
         <div className="max-w-[1400px] mx-auto">
@@ -95,6 +132,7 @@ export default function AgentDemo() {
           {tab === "outreach" && <OutreachPanel key={`out-${industry}`} provider={provider} industry={industry} />}
           {tab === "qualify" && <QualifyPanel key={`qua-${industry}`} provider={provider} industry={industry} />}
           {tab === "support" && <SupportPanel key={`sup-${industry}`} provider={provider} industry={industry} />}
+          {tab === "trucker" && <TruckerAIPanel />}
         </div>
       </section>
     </div>

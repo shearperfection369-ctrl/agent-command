@@ -5188,6 +5188,124 @@ async def alerts_ack_all(admin: str = Depends(require_admin)):
     return {"acked": res.modified_count}
 
 
+# ============================================================
+# TRUCKER AI · maps · parking · HOS · weather · 511 (all free public sources)
+# ============================================================
+import trucker_ai as trucker_mod
+
+
+@api.get("/trucker/hos-rules")
+async def trucker_hos_rules():
+    """Federal HOS rules (49 CFR §395). Codified, citable."""
+    return trucker_mod.HOS_RULES
+
+
+@api.post("/trucker/hos-check")
+async def trucker_hos_check(body: trucker_mod.HOSCheckBody):
+    return trucker_mod.hos_check(body)
+
+
+@api.post("/trucker/geocode")
+async def trucker_geocode(body: Dict[str, Any]):
+    q = (body or {}).get("query", "")
+    res = await trucker_mod.geocode(q)
+    if not res:
+        return {"ok": False, "query": q, "reason": "no_match_or_geocoder_error"}
+    return {"ok": True, "result": res}
+
+
+@api.post("/trucker/truck-stops")
+async def trucker_truck_stops(body: Dict[str, Any]):
+    """Find truck stops / fuel / rest areas / weigh stations near a point.
+    Body: { lat, lon, radius_miles, include[] } OR { query, radius_miles }."""
+    lat = body.get("lat"); lon = body.get("lon")
+    if lat is None or lon is None:
+        q = body.get("query")
+        if not q:
+            raise HTTPException(400, "Provide lat+lon OR query")
+        geo = await trucker_mod.geocode(q)
+        if not geo:
+            raise HTTPException(404, f"Could not geocode '{q}'")
+        lat, lon = geo["lat"], geo["lon"]
+    radius = float(body.get("radius_miles") or 50)
+    include = body.get("include") or None
+    rows = await trucker_mod.find_truck_stops(float(lat), float(lon), radius, include)
+    return {
+        "origin": {"lat": float(lat), "lon": float(lon)},
+        "radius_miles": radius, "count": len(rows), "stops": rows,
+        "source": "openstreetmap_overpass",
+        "source_url": "https://www.openstreetmap.org",
+    }
+
+
+@api.post("/trucker/route")
+async def trucker_route(body: Dict[str, Any]):
+    o_lat = body.get("origin_lat"); o_lon = body.get("origin_lon")
+    d_lat = body.get("dest_lat"); d_lon = body.get("dest_lon")
+    if o_lat is None or o_lon is None:
+        o = body.get("origin") or ""
+        geo = await trucker_mod.geocode(o)
+        if not geo:
+            raise HTTPException(400, f"Could not geocode origin '{o}'")
+        o_lat, o_lon = geo["lat"], geo["lon"]
+    if d_lat is None or d_lon is None:
+        d = body.get("destination") or ""
+        geo = await trucker_mod.geocode(d)
+        if not geo:
+            raise HTTPException(400, f"Could not geocode destination '{d}'")
+        d_lat, d_lon = geo["lat"], geo["lon"]
+    route = await trucker_mod.route_osrm(float(o_lat), float(o_lon), float(d_lat), float(d_lon))
+    if not route:
+        raise HTTPException(503, "Routing service unavailable")
+    return {
+        "origin": {"lat": float(o_lat), "lon": float(o_lon)},
+        "destination": {"lat": float(d_lat), "lon": float(d_lon)},
+        **route,
+    }
+
+
+@api.post("/trucker/weather")
+async def trucker_weather(body: Dict[str, Any]):
+    lat = body.get("lat"); lon = body.get("lon")
+    if lat is None or lon is None:
+        q = body.get("query")
+        if not q:
+            raise HTTPException(400, "Provide lat+lon OR query")
+        geo = await trucker_mod.geocode(q)
+        if not geo:
+            raise HTTPException(404, f"Could not geocode '{q}'")
+        lat, lon = geo["lat"], geo["lon"]
+    res = await trucker_mod.weather_at(float(lat), float(lon))
+    if not res:
+        raise HTTPException(503, "Weather service unavailable")
+    return res
+
+
+@api.get("/trucker/diesel-prices")
+async def trucker_diesel():
+    return await trucker_mod.diesel_prices()
+
+
+@api.get("/trucker/state-511/{state}")
+async def trucker_state_511(state: str):
+    res = trucker_mod.state_511(state)
+    if not res:
+        raise HTTPException(404, "Unknown state code")
+    return res
+
+
+@api.get("/trucker/state-511")
+async def trucker_state_511_list():
+    return {
+        "states": [{"state": s, "name": v[0], "url": v[1]}
+                   for s, v in sorted(trucker_mod.STATE_511.items())],
+        "source": "operator_directory_curated",
+    }
+
+
+
+
+
     # Mark all pre-existing prospects (created before is_synthetic field existed) as synthetic.
     # They were all AI-generated. New CSV / FMCSA seeded leads set is_synthetic=False explicitly.
     # -------------------- Startup: seed admin --------------------
