@@ -1,12 +1,14 @@
+/* eslint-disable no-empty */
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, User, ArrowsClockwise, Lifebuoy, Truck } from "@/lib/icons";
+import { ArrowRight, ChatCircle, FileText, EnvelopeSimple, Target, Stop, Robot, User, ArrowsClockwise, Lifebuoy, Truck, Database } from "@/lib/icons";
 import { api, API_BASE } from "../lib/api";
 import { CornerBrackets, SectionLabel } from "../components/Brackets";
 import { INDUSTRIES, sampleFor } from "../lib/industries";
 import { JadeAvatar, JadeWorking } from "../components/JadeAvatar";
 import { SaveActions } from "../components/SaveActions";
 import TruckerAIPanel from "../components/TruckerAIPanel";
+import ConsoleWorkbenchPanel from "../components/ConsoleWorkbenchPanel";
 
 const TABS = [
   { id: "chat", label: "OPS CO-PILOT", icon: ChatCircle, color: "#ccff00" },
@@ -15,6 +17,7 @@ const TABS = [
   { id: "qualify", label: "LEAD QUAL", icon: Target, color: "#ff3b8a" },
   { id: "support", label: "SUPPORT TRIAGE", icon: Lifebuoy, color: "#ccff00" },
   { id: "trucker", label: "TRUCKER · DRIVER OPS", icon: Truck, color: "#00ffff" },
+  { id: "workbench", label: "OPS WORKBENCH", icon: Database, color: "#ffce4f" },
 ];
 
 function SystemStatusStrip() {
@@ -133,6 +136,7 @@ export default function AgentDemo() {
           {tab === "qualify" && <QualifyPanel key={`qua-${industry}`} provider={provider} industry={industry} />}
           {tab === "support" && <SupportPanel key={`sup-${industry}`} provider={provider} industry={industry} />}
           {tab === "trucker" && <TruckerAIPanel />}
+          {tab === "workbench" && <ConsoleWorkbenchPanel />}
         </div>
       </section>
     </div>

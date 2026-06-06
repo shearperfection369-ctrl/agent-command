@@ -5303,6 +5303,382 @@ async def trucker_state_511_list():
     }
 
 
+# ============================================================
+# OPERATIONS WORKBENCH · 6 Labs · 8 Phases · Risks · Decisions
+# ============================================================
+import ops_workbench as ow_mod
+from fastapi.responses import FileResponse
+
+
+@api.get("/workbench/overview")
+async def workbench_overview(_: str = Depends(require_admin)):
+    risks = await db.workbench_risks.find({}, {"_id": 0}).sort("id", 1).to_list(50)
+    decisions = await db.workbench_decisions.find({}, {"_id": 0}).sort("id", 1).to_list(50)
+    phases = await db.workbench_phases.find({}, {"_id": 0}).sort("n", 1).to_list(20)
+    return {
+        "operations": ow_mod.OPERATIONS,
+        "phases": phases or ow_mod.PHASES,
+        "risks": risks, "decisions": decisions,
+        "materials": ow_mod.MATERIALS, "tools": ow_mod.TOOLS,
+        "summary": {
+            "ops_total": len(ow_mod.OPERATIONS),
+            "ops_full": sum(1 for o in ow_mod.OPERATIONS if o["depth"] == "full"),
+            "ops_scaffolded": sum(1 for o in ow_mod.OPERATIONS if o["depth"] == "scaffolded"),
+            "decisions_pending": sum(1 for d in decisions if d.get("status") == "pending"),
+            "decisions_decided": sum(1 for d in decisions if d.get("status") == "decided"),
+            "risks_open": sum(1 for r in risks if r.get("status") == "open"),
+        },
+    }
+
+
+@api.patch("/workbench/decisions/{did}")
+async def workbench_decision_flip(did: str, body: ow_mod.DecisionFlip, admin: str = Depends(require_admin)):
+    d = await db.workbench_decisions.find_one({"id": did}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Decision not found")
+    if d.get("options") and body.choice not in d["options"]:
+        raise HTTPException(400, f"choice must be one of {d['options']}")
+    await db.workbench_decisions.update_one({"id": did}, {"$set": {
+        "choice": body.choice, "rationale": body.rationale,
+        "status": body.status, "decided_by": admin,
+        "decided_at": _utcnow_iso(), "updated_at": _utcnow_iso(),
+    }})
+    after = await db.workbench_decisions.find_one({"id": did}, {"_id": 0})
+    await _audit(admin, "workbench.decision.flipped", "decision", target_id=did,
+                 before=d, after=after, metadata={"choice": body.choice})
+    return after
+
+
+@api.patch("/workbench/risks/{rid}")
+async def workbench_risk_update(rid: str, body: ow_mod.RiskUpdate, admin: str = Depends(require_admin)):
+    r = await db.workbench_risks.find_one({"id": rid}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Risk not found")
+    upd: Dict[str, Any] = {"updated_at": _utcnow_iso()}
+    if body.severity: upd["severity"] = body.severity
+    if body.status: upd["status"] = body.status
+    if body.mitigation_notes is not None: upd["mitigation_notes"] = body.mitigation_notes
+    await db.workbench_risks.update_one({"id": rid}, {"$set": upd})
+    after = await db.workbench_risks.find_one({"id": rid}, {"_id": 0})
+    await _audit(admin, "workbench.risk.updated", "risk", target_id=rid, before=r, after=after)
+    return after
+
+
+@api.patch("/workbench/phases/{n}/steps")
+async def workbench_phase_step(n: int, body: ow_mod.PhaseStepUpdate, admin: str = Depends(require_admin)):
+    p = await db.workbench_phases.find_one({"n": n}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Phase not found")
+    steps = p.get("steps") or []
+    if body.step_index < 0 or body.step_index >= len(steps):
+        raise HTTPException(400, "step_index out of range")
+    steps[body.step_index]["status"] = body.status
+    if body.notes is not None:
+        steps[body.step_index]["notes"] = body.notes
+    await db.workbench_phases.update_one({"n": n}, {"$set": {"steps": steps, "updated_at": _utcnow_iso()}})
+    after = await db.workbench_phases.find_one({"n": n}, {"_id": 0})
+    await _audit(admin, "workbench.phase.step_updated", "phase", target_id=str(n),
+                 metadata={"step": body.step_index, "status": body.status})
+    return after
+
+
+@api.post("/workbench/labs/op-01/run")
+async def lab_op01_run(_: str = Depends(require_admin)):
+    """LLM market-analysis run · produces source-cited PDF."""
+    run_id = str(uuid.uuid4())
+    started = _utcnow_iso()
+    try:
+        chat = _llm(f"op01-{run_id}", ow_mod.MARKET_ANALYSIS_SYS, "anthropic")
+        raw: List[str] = []
+        async for ev in chat.stream_message(UserMessage(text="Generate the deep-dive on the Minnesota freight industry per the spec.")):
+            if isinstance(ev, TextDelta):
+                raw.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+        text = "".join(raw)
+        data = json.loads(_strip_json(text))
+        sections = data.get("sections") or []
+        if not sections:
+            raise HTTPException(500, "LLM produced no sections")
+        out_dir = "/app/backend/static_workbench"
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = f"{out_dir}/op01_{run_id}.pdf"
+        ow_mod.generate_market_analysis_pdf(sections, out_path)
+        rec = {
+            "id": run_id, "op_id": "OP-01", "started_at": started,
+            "completed_at": _utcnow_iso(),
+            "sections": sections, "pdf_path": out_path,
+            "pdf_download_url": f"/api/workbench/labs/op-01/download/{run_id}",
+            "section_count": len(sections), "status": "completed",
+        }
+        await db.workbench_runs.insert_one(rec)
+        rec.pop("_id", None)
+        await _audit("admin", "workbench.lab.completed", "lab_run", target_id=run_id,
+                     metadata={"op_id": "OP-01", "sections": len(sections)})
+        return rec
+    except HTTPException:
+        raise
+    except Exception as e:
+        info = classify_llm_error(e)
+        raise HTTPException(info.get("http_status", 500), info.get("message", str(e)))
+
+
+@api.get("/workbench/labs/op-01/download/{run_id}")
+async def lab_op01_download(run_id: str, _: str = Depends(require_admin)):
+    rec = await db.workbench_runs.find_one({"id": run_id, "op_id": "OP-01"}, {"_id": 0})
+    if not rec or not rec.get("pdf_path") or not os.path.exists(rec["pdf_path"]):
+        raise HTTPException(404, "PDF not found")
+    return FileResponse(rec["pdf_path"], media_type="application/pdf",
+                        filename=f"jadeos_market_analysis_{run_id[:8]}.pdf")
+
+
+@api.post("/workbench/labs/op-02/run")
+async def lab_op02_run(body: Dict[str, Any], admin: str = Depends(require_admin)):
+    archetype = body.get("archetype") or "mid_market"
+    fleet = int(body.get("fleet_size") or 0)
+    model = ow_mod.build_roi_model(archetype=archetype, fleet_size=fleet)
+    run_id = str(uuid.uuid4())
+    rec = {"id": run_id, "op_id": "OP-02", "archetype": archetype, "fleet_size_override": fleet,
+           "model": model, "status": "completed", "completed_at": _utcnow_iso()}
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    await _audit(admin, "workbench.lab.completed", "lab_run", target_id=run_id,
+                 metadata={"op_id": "OP-02", "archetype": archetype})
+    return rec
+
+
+@api.post("/workbench/labs/op-06/run")
+async def lab_op06_run(_: str = Depends(require_admin)):
+    inserted = 0; updated = 0; now = _utcnow_iso()
+    for c in fmcsa_mod.MN_FREIGHT_SEED:
+        match = {"dot_number": c["dot_number"]} if c.get("dot_number") else {"company": c["company"]}
+        existing = await db.prospects.find_one(match, {"_id": 0, "id": 1})
+        if existing:
+            updated += 1
+            continue
+        doc = {
+            "id": str(uuid.uuid4()), "company": c["company"], "industry": c["industry"],
+            "city": c.get("city"), "state": c.get("state"), "zip": c.get("zip"),
+            "website": c.get("website"), "company_size": c.get("company_size"),
+            "ticker": c.get("ticker"), "dot_number": c.get("dot_number"),
+            "mc_number": c.get("mc_number"), "name": None,
+            "title": "(enrich via Apollo / LinkedIn)",
+            "email": (c.get("contact_email") or "").lower(),
+            "is_synthetic": False, "is_verified": fmcsa_mod.is_email_format_valid(c.get("contact_email", "")),
+            "verification_source": "curated_seed_via_workbench_op06",
+            "notes": c.get("notes", ""), "contacted": False, "created_at": now,
+        }
+        await db.prospects.insert_one(doc)
+        inserted += 1
+    rows = await db.prospects.find({"is_synthetic": {"$ne": True}}, {"_id": 0}).sort("company", 1).limit(50).to_list(50)
+    run_id = str(uuid.uuid4())
+    rec = {"id": run_id, "op_id": "OP-06", "inserted": inserted, "updated": updated,
+           "companies": rows, "count": len(rows), "status": "completed", "completed_at": now}
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    return rec
+
+
+@api.post("/workbench/labs/op-03/run")
+async def lab_op03_run(admin: str = Depends(require_admin)):
+    """AI Systems Architecture · returns structured architecture spec."""
+    run_id = str(uuid.uuid4())
+    rec = {
+        "id": run_id, "op_id": "OP-03", "status": "completed",
+        "architecture": ow_mod.AI_ARCHITECTURE,
+        "module_count": len(ow_mod.AI_ARCHITECTURE["modules"]),
+        "completed_at": _utcnow_iso(),
+    }
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    await _audit(admin, "workbench.lab.completed", "lab_run", target_id=run_id,
+                 metadata={"op_id": "OP-03"})
+    return rec
+
+
+@api.post("/workbench/labs/op-04/run")
+async def lab_op04_run(admin: str = Depends(require_admin)):
+    """Sales Collateral · pitch deck + fact sheets + readiness + competitive brief."""
+    run_id = str(uuid.uuid4())
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    pdf_path = f"{out_dir}/op04_{run_id}.pdf"
+    ow_mod.generate_pitch_deck_pdf(pdf_path)
+    rec = {
+        "id": run_id, "op_id": "OP-04", "status": "completed",
+        "deck": ow_mod.PITCH_DECK,
+        "slide_count": len(ow_mod.PITCH_DECK["slides"]),
+        "factsheet_count": len(ow_mod.PITCH_DECK["fact_sheets"]),
+        "pdf_path": pdf_path,
+        "pdf_download_url": f"/api/workbench/labs/op-04/download/{run_id}",
+        "completed_at": _utcnow_iso(),
+    }
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    await _audit(admin, "workbench.lab.completed", "lab_run", target_id=run_id,
+                 metadata={"op_id": "OP-04"})
+    return rec
+
+
+@api.get("/workbench/labs/op-04/download/{run_id}")
+async def lab_op04_download(run_id: str, _: str = Depends(require_admin)):
+    rec = await db.workbench_runs.find_one({"id": run_id, "op_id": "OP-04"}, {"_id": 0})
+    if not rec or not rec.get("pdf_path") or not os.path.exists(rec["pdf_path"]):
+        raise HTTPException(404, "PDF not found")
+    return FileResponse(rec["pdf_path"], media_type="application/pdf",
+                        filename=f"jadeos_pitch_deck_{run_id[:8]}.pdf")
+
+
+@api.post("/workbench/labs/op-05/run")
+async def lab_op05_run(admin: str = Depends(require_admin)):
+    """Technical Brief · 10-section operator-grade PDF."""
+    run_id = str(uuid.uuid4())
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    pdf_path = f"{out_dir}/op05_{run_id}.pdf"
+    ow_mod.generate_technical_doc_pdf(pdf_path)
+    rec = {
+        "id": run_id, "op_id": "OP-05", "status": "completed",
+        "sections": ow_mod.TECHNICAL_DOC_SECTIONS,
+        "section_count": len(ow_mod.TECHNICAL_DOC_SECTIONS),
+        "pdf_path": pdf_path,
+        "pdf_download_url": f"/api/workbench/labs/op-05/download/{run_id}",
+        "completed_at": _utcnow_iso(),
+    }
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    await _audit(admin, "workbench.lab.completed", "lab_run", target_id=run_id,
+                 metadata={"op_id": "OP-05"})
+    return rec
+
+
+@api.get("/workbench/labs/op-05/download/{run_id}")
+async def lab_op05_download(run_id: str, _: str = Depends(require_admin)):
+    rec = await db.workbench_runs.find_one({"id": run_id, "op_id": "OP-05"}, {"_id": 0})
+    if not rec or not rec.get("pdf_path") or not os.path.exists(rec["pdf_path"]):
+        raise HTTPException(404, "PDF not found")
+    return FileResponse(rec["pdf_path"], media_type="application/pdf",
+                        filename=f"jadeos_technical_brief_{run_id[:8]}.pdf")
+
+
+@api.post("/workbench/labs/{op_id}/run")
+async def lab_scaffold_run(op_id: str, _: str = Depends(require_admin)):
+    op_id_upper = op_id.upper()
+    op = next((o for o in ow_mod.OPERATIONS if o["id"].upper() == op_id_upper), None)
+    if not op:
+        raise HTTPException(404, "Unknown op_id")
+    if op["depth"] == "full":
+        raise HTTPException(400, f"{op_id} has a dedicated Lab endpoint")
+    run_id = str(uuid.uuid4())
+    rec = {"id": run_id, "op_id": op["id"], "status": "scaffold_only",
+           "code": op["code"], "title": op["title"], "deliverable": op["deliverable"],
+           "note": "This Lab is scaffolded — full functional generation lands in a future iteration.",
+           "completed_at": _utcnow_iso()}
+    await db.workbench_runs.insert_one(rec)
+    rec.pop("_id", None)
+    return rec
+
+
+@api.get("/workbench/labs/{op_id}/runs")
+async def lab_runs_list(op_id: str, limit: int = 20, _: str = Depends(require_admin)):
+    rows = await db.workbench_runs.find({"op_id": op_id.upper()}, {"_id": 0}).sort("completed_at", -1).limit(limit).to_list(limit)
+    return {"op_id": op_id.upper(), "runs": rows, "count": len(rows)}
+
+
+# ============================================================
+# PUBLIC AGENT-CONSOLE WRAPPERS · expose workbench capabilities
+# in the demo console (no admin gate, rate-limit-friendly)
+# ============================================================
+
+@api.get("/agent/workbench/architecture")
+async def agent_architecture():
+    """Public view of the 6-module AI architecture (OP-03 data)."""
+    return {
+        "modules": ow_mod.AI_ARCHITECTURE["modules"],
+        "data_pipeline": ow_mod.AI_ARCHITECTURE["data_pipeline"],
+        "swimlanes": ow_mod.AI_ARCHITECTURE["swimlanes"],
+        "api_surface": ow_mod.AI_ARCHITECTURE["api_surface"],
+        "source": "ops_workbench.AI_ARCHITECTURE",
+    }
+
+
+@api.post("/agent/workbench/roi")
+async def agent_roi(body: Dict[str, Any]):
+    """Public ROI modeler (OP-02). Pure math, no LLM. Rate-floor-friendly."""
+    archetype = (body or {}).get("archetype") or "mid_market"
+    if archetype not in {"small_regional", "mid_market", "specialized_hazmat"}:
+        raise HTTPException(400, "archetype must be one of: small_regional · mid_market · specialized_hazmat")
+    fleet = int((body or {}).get("fleet_size") or 0)
+    return {"model": ow_mod.build_roi_model(archetype=archetype, fleet_size=fleet)}
+
+
+@api.get("/agent/workbench/collateral")
+async def agent_collateral():
+    """Public view of the pitch deck + fact sheets + readiness + competitive brief (OP-04)."""
+    return {
+        "deck": ow_mod.PITCH_DECK,
+        "slide_count": len(ow_mod.PITCH_DECK["slides"]),
+        "factsheet_count": len(ow_mod.PITCH_DECK["fact_sheets"]),
+    }
+
+
+@api.get("/agent/workbench/document")
+async def agent_document():
+    """Public view of the technical-brief sections (OP-05)."""
+    return {
+        "sections": ow_mod.TECHNICAL_DOC_SECTIONS,
+        "section_count": len(ow_mod.TECHNICAL_DOC_SECTIONS),
+    }
+
+
+@api.get("/agent/workbench/document.pdf")
+async def agent_document_pdf():
+    """Public download · OP-05 technical brief PDF (deterministic content, regenerated on demand)."""
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = f"{out_dir}/public_technical_brief.pdf"
+    if not os.path.exists(out_path):
+        ow_mod.generate_technical_doc_pdf(out_path)
+    return FileResponse(out_path, media_type="application/pdf",
+                        filename="jadeos_technical_brief.pdf")
+
+
+@api.get("/agent/workbench/deck.pdf")
+async def agent_deck_pdf():
+    """Public download · OP-04 pitch deck PDF (deterministic content)."""
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = f"{out_dir}/public_pitch_deck.pdf"
+    if not os.path.exists(out_path):
+        ow_mod.generate_pitch_deck_pdf(out_path)
+    return FileResponse(out_path, media_type="application/pdf",
+                        filename="jadeos_pitch_deck.pdf")
+
+
+@api.get("/agent/workbench/decisions")
+async def agent_decisions():
+    """Public view of the 5 strategic decisions (read-only)."""
+    decisions = await db.workbench_decisions.find({}, {"_id": 0}).sort("id", 1).to_list(50)
+    return {"decisions": decisions, "count": len(decisions)}
+
+
+@api.get("/agent/workbench/risks")
+async def agent_risks():
+    """Public view of the 7-item risks register (read-only)."""
+    risks = await db.workbench_risks.find({}, {"_id": 0}).sort("id", 1).to_list(50)
+    return {"risks": risks, "count": len(risks)}
+
+
+@api.get("/agent/workbench/phases")
+async def agent_phases():
+    """Public view of 8-phase rollout plan."""
+    phases = await db.workbench_phases.find({}, {"_id": 0}).sort("n", 1).to_list(20)
+    return {"phases": phases or ow_mod.PHASES, "count": len(phases) if phases else len(ow_mod.PHASES)}
+
+
+
+
+
 
 
 
@@ -5354,6 +5730,13 @@ async def seed_admin():
     )
     if backfill.modified_count:
         log.info(f"prospects · backfilled {backfill.modified_count} legacy records as is_synthetic=True")
+    # Seed workbench (risks · decisions · phases) — idempotent
+    try:
+        seed_res = await ow_mod.seed_workbench(db)
+        if any(seed_res.values()):
+            log.info(f"workbench · seeded {seed_res}")
+    except Exception as e:
+        log.warning("workbench · seed failed · %s", e)
 
 
 @app.on_event("shutdown")
