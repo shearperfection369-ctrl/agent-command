@@ -611,62 +611,205 @@ function RisksRegister({ risks, onUpdate }) {
     );
 }
 
-function PhasesView({ phases }) {
+function PhasesView({ phases, onStepUpdate }) {
+    const STATUS_META = {
+        todo: { sym: "○", c: "rgba(255,255,255,0.45)", lbl: "TODO" },
+        in_progress: { sym: "▸", c: "#00ffff", lbl: "ACTIVE" },
+        done: { sym: "✓", c: "#ccff00", lbl: "DONE" },
+        blocked: { sym: "✗", c: "#ff3b8a", lbl: "BLOCKED" },
+    };
+    const NEXT_STATUS = { todo: "in_progress", in_progress: "done", done: "todo", blocked: "in_progress" };
+    const totalSteps = phases.reduce((a, p) => a + (p.steps || []).length, 0);
+    const totalHours = phases.reduce((a, p) => a + (p.steps || []).reduce((b, s) => b + (s.hours || 0), 0), 0);
+    const totalDone = phases.reduce((a, p) => a + (p.steps || []).filter((s) => s.status === "done").length, 0);
     return (
-        <div className="space-y-3" data-testid="phases-view">
-            {phases.map((p) => (
-                <div key={p.n} className="deck-card relative p-4" data-testid={`phase-${p.n}`}>
-                    <CornerBrackets />
-                    <div className="flex items-baseline justify-between flex-wrap gap-2">
-                        <div className="font-display font-black text-white text-base">PHASE {p.n} · {p.title}</div>
-                        <span className="mono-label text-[10px] text-[#7c5cff]">{p.duration}</span>
+        <div className="space-y-4" data-testid="phases-view">
+            <div className="grid sm:grid-cols-4 gap-3">
+                <Stat k="PHASES" v={phases.length} c="#7c5cff" />
+                <Stat k="SUBSTEPS" v={totalSteps} c="#00ffff" sub={`${totalDone} done`} />
+                <Stat k="HOURS · BUDGET" v={`${totalHours}h`} c="#ccff00" sub={`~${(totalHours / 8).toFixed(1)} days`} />
+                <Stat k="COMPLETE" v={`${totalSteps ? Math.round((totalDone / totalSteps) * 100) : 0}%`} c="#ff3b8a" />
+            </div>
+            {phases.map((p) => {
+                const pSteps = p.steps || [];
+                const pDone = pSteps.filter((s) => s.status === "done").length;
+                const pHours = pSteps.reduce((b, s) => b + (s.hours || 0), 0);
+                const pct = pSteps.length ? Math.round((pDone / pSteps.length) * 100) : 0;
+                return (
+                    <div key={p.n} className="deck-card relative" data-testid={`phase-${p.n}`}>
+                        <CornerBrackets />
+                        <div className="px-5 py-4 border-b border-white/10">
+                            <div className="flex items-baseline justify-between flex-wrap gap-2">
+                                <div>
+                                    <div className="mono-label text-[10px] text-[#7c5cff]">PHASE {p.n}</div>
+                                    <h3 className="font-display font-black text-white text-lg leading-tight mt-0.5">{p.title}</h3>
+                                </div>
+                                <div className="flex flex-wrap items-baseline gap-3 text-[10px] font-mono-tech">
+                                    <span className="text-white/55">DURATION · {p.duration}</span>
+                                    {p.owner && <span className="text-white/55">OWNER · {p.owner}</span>}
+                                    <span className="text-white/55">{pSteps.length} STEPS · {pHours}h</span>
+                                    {p.op_link && (
+                                        <a href={`#lab-${p.op_link}`} className="mono-label text-[10px] text-[#ccff00] hover:underline">{p.op_link_label || `→ ${p.op_link}`}</a>
+                                    )}
+                                </div>
+                            </div>
+                            {p.outcome && (
+                                <p className="font-mono-tech text-[11px] text-white/70 mt-2 leading-relaxed border-l-2 border-[#ccff0055] pl-3">
+                                    <span className="mono-label text-[9px] text-[#ccff00] mr-2">OUTCOME</span>{p.outcome}
+                                </p>
+                            )}
+                            <div className="mt-3 flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-white/5 overflow-hidden">
+                                    <div className="h-full" style={{ width: `${pct}%`, background: pct >= 100 ? "#ccff00" : pct > 0 ? "#00ffff" : "rgba(255,255,255,0.2)" }} />
+                                </div>
+                                <span className="mono-label text-[10px] text-white/55">{pct}% · {pDone}/{pSteps.length}</span>
+                            </div>
+                        </div>
+                        <div className="divide-y divide-white/5">
+                            {pSteps.map((s, i) => {
+                                if (typeof s === "string") return (
+                                    <div key={i} className="px-5 py-2 font-mono-tech text-[11px] text-white/65">○ {s}</div>
+                                );
+                                const meta = STATUS_META[s.status || "todo"];
+                                return (
+                                    <div key={i} className="px-5 py-3" data-testid={`phase-${p.n}-step-${s.id || i}`}>
+                                        <div className="flex items-start gap-3">
+                                            <span className="font-mono-tech text-base mt-0.5" style={{ color: meta.c }}>{meta.sym}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                                                    <span className="font-display font-bold text-white text-[12.5px] leading-snug">{s.id ? `${s.id} · ` : ""}{s.text}</span>
+                                                    <div className="flex flex-wrap gap-2 items-baseline text-[10px] font-mono-tech">
+                                                        {s.hours != null && <span className="mono-label" style={{ color: "#ccff00" }}>{s.hours}h</span>}
+                                                        {s.owner && <span className="text-[#7c5cff]">{s.owner.toUpperCase()}</span>}
+                                                        {s.op_link && <a href={`#lab-${s.op_link}`} className="text-[#00ffff] hover:underline">→ {s.op_link}</a>}
+                                                        <span className="mono-label" style={{ color: meta.c }}>{meta.lbl}</span>
+                                                        {onStepUpdate && (
+                                                            <button data-testid={`phase-${p.n}-step-${s.id || i}-advance`}
+                                                                onClick={() => onStepUpdate(p.n, i, NEXT_STATUS[s.status || "todo"])}
+                                                                className="mono-label text-[9px] text-[#ccff00] hover:underline">→ ADVANCE</button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {s.deliverable && (
+                                                    <div className="font-mono-tech text-[10.5px] text-white/65 mt-1">
+                                                        <span className="mono-label text-[9px] text-[#ccff00] mr-1">DELIVERABLE</span>{s.deliverable}
+                                                    </div>
+                                                )}
+                                                {s.exit_criteria && (
+                                                    <div className="font-mono-tech text-[10.5px] text-white/65 mt-1">
+                                                        <span className="mono-label text-[9px] text-[#00ffff] mr-1">EXIT</span>{s.exit_criteria}
+                                                    </div>
+                                                )}
+                                                {(s.tools || []).length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                        {s.tools.map((t, j) => (
+                                                            <span key={j} className="px-2 py-0.5 mono-label text-[9px] text-white/55 border border-white/10">{t}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {(s.depends_on || []).length > 0 && (
+                                                    <div className="font-mono-tech text-[9.5px] text-white/45 mt-1">
+                                                        ⊢ depends · {s.depends_on.join(" · ")}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <ul className="space-y-1 mt-2">
-                        {p.steps.map((s, i) => {
-                            const text = typeof s === "string" ? s : s.text;
-                            const status = typeof s === "string" ? "todo" : s.status;
-                            const c = status === "done" ? "#ccff00" : status === "in_progress" ? "#00ffff" : status === "blocked" ? "#ff3b8a" : "rgba(255,255,255,0.5)";
-                            return (
-                                <li key={i} className="font-mono-tech text-[11px] flex gap-2 leading-snug" style={{ color: c }}>
-                                    <span>{status === "done" ? "✓" : status === "in_progress" ? "▸" : status === "blocked" ? "✗" : "○"}</span>{text}
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }
 
 function MaterialsTools({ materials, tools }) {
+    const COST_COLOR = (c) => c === 0 ? "#ccff00" : c <= 100 ? "#00ffff" : c <= 500 ? "#ffce4f" : "#ff3b8a";
+    const totalCost = materials.reduce((a, m) => a + (m.cost_usd || 0), 0);
+    const freeCount = materials.filter((m) => m.cost_usd === 0).length;
+    const KIND_LABEL = {
+        public: "PUBLIC · FREE",
+        subscription_or_trial: "SUBSCRIPTION / TRIAL",
+        paid_reports: "PAID REPORTS",
+        api: "API",
+    };
+    const CATEGORY_COLOR = {
+        business_research: "#00ffff",
+        market_analysis: "#7c5cff",
+        financial_modeling: "#ccff00",
+        ai_systems_architecture: "#ff3b8a",
+        sales_collateral: "#ffce4f",
+        documents: "#00ffff",
+    };
     return (
-        <div className="grid lg:grid-cols-2 gap-4">
+        <div className="space-y-4" data-testid="materials-tools-dashboard">
+            <div className="grid sm:grid-cols-4 gap-3">
+                <Stat k="MATERIALS" v={materials.length} c="#00ffff" />
+                <Stat k="FREE" v={`${freeCount}/${materials.length}`} c="#ccff00" sub="public sources" />
+                <Stat k="STACK COST" v={`$${totalCost}`} c="#ffce4f" sub="one-time + subscription" />
+                <Stat k="TOOLS" v={tools.length} c="#7c5cff" sub="operator stack" />
+            </div>
+
             <div className="deck-card relative" data-testid="materials-panel">
                 <CornerBrackets />
-                <div className="px-5 py-3 border-b border-white/10 mono-label text-[#00ffff]">MATERIALS · {materials.length}</div>
-                <div className="divide-y divide-white/5">
-                    {materials.map((m, i) => (
-                        <div key={i} className="px-5 py-3 grid grid-cols-[1fr_60px] gap-2">
-                            <div>
-                                <a href={m.url} target="_blank" rel="noreferrer" className="font-display font-bold text-white text-sm hover:text-[#00ffff]">{m.name}</a>
-                                <div className="mono-label text-[9px] text-white/55 mt-0.5">{m.category} · {m.kind}</div>
-                            </div>
-                            <span className="font-display font-bold text-[#ccff00] text-right">{m.cost_usd === 0 ? "FREE" : `$${m.cost_usd}`}</span>
-                        </div>
-                    ))}
+                <div className="px-5 py-3 border-b border-white/10 flex justify-between items-baseline gap-3 flex-wrap">
+                    <div>
+                        <div className="mono-label text-[#00ffff]">MATERIALS · {materials.length} SOURCES</div>
+                        <p className="font-mono-tech text-[10.5px] text-white/55 mt-1">Curated reference stack · click any source to open</p>
+                    </div>
+                    <div className="font-mono-tech text-[10px] text-white/45">SORTED · category × cost ↑</div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-px bg-white/5">
+                    {materials
+                        .slice()
+                        .sort((a, b) => (a.category || "").localeCompare(b.category) || (a.cost_usd || 0) - (b.cost_usd || 0))
+                        .map((m, i) => {
+                            const cc = CATEGORY_COLOR[m.category] || "#ccff00";
+                            return (
+                                <a key={i} href={m.url || "#"} target="_blank" rel="noreferrer"
+                                    className="bg-[#0a0c18] px-5 py-4 relative block hover:bg-[#10131e] transition group"
+                                    data-testid={`material-${i}`}
+                                    style={{ borderLeft: `3px solid ${cc}` }}>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <span className="mono-label text-[10px]" style={{ color: cc }}>{(m.category || "").replace(/_/g, " ").toUpperCase()}</span>
+                                        <span className="mono-label text-[10px]" style={{ color: COST_COLOR(m.cost_usd || 0) }}>
+                                            {m.cost_usd === 0 ? "● FREE" : `$${m.cost_usd}`}
+                                        </span>
+                                    </div>
+                                    <div className="font-display font-black text-white text-sm mt-1.5 leading-snug group-hover:text-[#ccff00] transition">
+                                        {m.name}
+                                    </div>
+                                    <div className="flex items-baseline justify-between mt-2 flex-wrap gap-2">
+                                        <span className="font-mono-tech text-[10px] text-white/45">{KIND_LABEL[m.kind] || (m.kind || "").toUpperCase()}</span>
+                                        {m.url && <span className="font-mono-tech text-[10px] text-white/45 truncate max-w-[260px]">↗ {m.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>}
+                                    </div>
+                                </a>
+                            );
+                        })}
                 </div>
             </div>
+
             <div className="deck-card relative" data-testid="tools-panel">
                 <CornerBrackets />
-                <div className="px-5 py-3 border-b border-white/10 mono-label text-[#ccff00]">TOOLS · {tools.length}</div>
-                <div className="divide-y divide-white/5">
-                    {tools.map((t, i) => (
-                        <div key={i} className="px-5 py-3">
-                            <div className="font-display font-bold text-white text-sm">{t.name}</div>
-                            <div className="mono-label text-[9px] text-[#7c5cff] mt-0.5">{t.category}</div>
-                        </div>
-                    ))}
+                <div className="px-5 py-3 border-b border-white/10 flex justify-between items-baseline gap-3 flex-wrap">
+                    <div>
+                        <div className="mono-label text-[#ccff00]">TOOLS · {tools.length} OPERATOR STACK</div>
+                        <p className="font-mono-tech text-[10.5px] text-white/55 mt-1">Software + canvas used to produce each deliverable</p>
+                    </div>
+                </div>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/5">
+                    {tools.map((t, i) => {
+                        const cc = CATEGORY_COLOR[t.category] || "#ccff00";
+                        return (
+                            <div key={i} className="bg-[#0a0c18] px-5 py-4 relative" data-testid={`tool-${i}`}
+                                style={{ borderTop: `2px solid ${cc}55` }}>
+                                <div className="mono-label text-[10px]" style={{ color: cc }}>{(t.category || "").replace(/_/g, " ").toUpperCase()}</div>
+                                <div className="font-display font-bold text-white text-sm mt-1.5 leading-snug">{t.name}</div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -697,6 +840,11 @@ export default function WorkbenchPanel() {
     const updateRisk = async (id, body) => {
         try { await api.patch(`/workbench/risks/${id}`, body); toast.success("Updated"); load(); }
         catch { toast.error("Update failed."); }
+    };
+
+    const updateStep = async (n, step_index, status) => {
+        try { await api.patch(`/workbench/phases/${n}/steps`, { step_index, status }); load(); }
+        catch { toast.error("Step update failed."); }
     };
 
     if (loading) return <div className="deck-card p-12 flex justify-center"><JadeWorking verb="loading workbench" size={72} /></div>;
@@ -754,7 +902,7 @@ export default function WorkbenchPanel() {
             </div>
 
             {view === "ops" && <OperationsGrid ops={data.operations} onOpen={setOpenOp} />}
-            {view === "phases" && <PhasesView phases={data.phases} />}
+            {view === "phases" && <PhasesView phases={data.phases} onStepUpdate={updateStep} />}
             {view === "decisions" && <DecisionsTracker decisions={data.decisions} onFlip={flipDecision} />}
             {view === "risks" && <RisksRegister risks={data.risks} onUpdate={updateRisk} />}
             {view === "materials" && <MaterialsTools materials={data.materials} tools={data.tools} />}

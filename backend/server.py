@@ -5315,6 +5315,17 @@ async def workbench_overview(_: str = Depends(require_admin)):
     risks = await db.workbench_risks.find({}, {"_id": 0}).sort("id", 1).to_list(50)
     decisions = await db.workbench_decisions.find({}, {"_id": 0}).sort("id", 1).to_list(50)
     phases = await db.workbench_phases.find({}, {"_id": 0}).sort("n", 1).to_list(20)
+    # Compute progress over the deep substep ledger
+    total_steps = 0; done_steps = 0; in_prog_steps = 0; blocked_steps = 0
+    for p in phases:
+        for s in (p.get("steps") or []):
+            if not isinstance(s, dict):
+                continue
+            total_steps += 1
+            st = s.get("status") or "todo"
+            if st == "done": done_steps += 1
+            elif st == "in_progress": in_prog_steps += 1
+            elif st == "blocked": blocked_steps += 1
     return {
         "operations": ow_mod.OPERATIONS,
         "phases": phases or ow_mod.PHASES,
@@ -5327,8 +5338,22 @@ async def workbench_overview(_: str = Depends(require_admin)):
             "decisions_pending": sum(1 for d in decisions if d.get("status") == "pending"),
             "decisions_decided": sum(1 for d in decisions if d.get("status") == "decided"),
             "risks_open": sum(1 for r in risks if r.get("status") == "open"),
+            "steps_total": total_steps,
+            "steps_done": done_steps,
+            "steps_in_progress": in_prog_steps,
+            "steps_blocked": blocked_steps,
+            "steps_pct_complete": round((done_steps / total_steps) * 100, 1) if total_steps else 0,
+            "deep_plan": ow_mod.deep_steps_summary(),
         },
     }
+
+
+@api.post("/workbench/reseed-phases")
+async def workbench_reseed_phases(admin: str = Depends(require_admin)):
+    """Force-upgrade the workbench_phases collection to the latest PHASES_DEEP schema."""
+    res = await ow_mod.seed_workbench(db, force_reseed_phases=True)
+    await _audit(admin, "workbench.reseed.phases", "phases", target_id="all", metadata=res)
+    return res
 
 
 @api.patch("/workbench/decisions/{did}")

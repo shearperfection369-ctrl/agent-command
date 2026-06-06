@@ -88,7 +88,7 @@ OPERATIONS = [
 ]
 
 
-# ---------- PHASES · 8 PHASES with steps ----------
+# ---------- PHASES · 8 PHASES with steps (flat — legacy) ----------
 
 PHASES = [
     {
@@ -146,6 +146,262 @@ PHASES = [
         "Pipeline reporting dashboard + decision-checkpoint cadence",
     ]},
 ]
+
+
+# ---------- PHASES_DEEP · operator-grade execution plan ----------
+# Every step is expanded into structured sub-tasks with:
+#   id · text · deliverable · exit_criteria · tools · hours · owner · depends_on · op_link
+# op_link wires the step back to the corresponding OP-XX lab when applicable so
+# the operator can jump from plan → execution in one click.
+
+def _s(id, text, deliverable, exit_criteria, tools, hours, owner, depends_on=None, op_link=None):
+    return {"id": id, "text": text, "deliverable": deliverable,
+            "exit_criteria": exit_criteria, "tools": tools, "hours": hours,
+            "owner": owner, "depends_on": depends_on or [], "op_link": op_link,
+            "status": "todo", "notes": None}
+
+
+PHASES_DEEP = [
+    # ----- PHASE 1 ---------------------------------------------------------
+    {"n": 1, "title": "Market Research & Company Identification",
+     "duration": "3–4 days", "owner": "Analyst + Founder",
+     "outcome": "A clean, source-traceable target universe of 50-150 MN freight companies + 3-4 buyer-persona definitions with documented workflow gaps.",
+     "op_link": "OP-01", "op_link_label": "Run OP-01 Market Analysis",
+     "substeps": [
+        _s("1.1", "Query MN SOS SOFI for freight/trucking/logistics LLCs + Corps with ≥5 employees on SIC 4213/4214/4215/4221/7359",
+           "CSV export · ≥500 raw rows", "rows have legal_name + entity_type + status=active + filing_date",
+           ["MN SOS SOFI (sos.state.mn.us)", "Python csv module"], 4, "Analyst", [], "OP-06"),
+        _s("1.2", "Cross-reference exported list with Trucking Association of MN + MN Motor Carriers Association rosters",
+           "Joined CSV · de-duped on legal_name + DOT#", "≥250 carriers survive de-dup, each row carries TAM_member=true/false",
+           ["mntruck.org", "FMCSA SAFER", "openrefine"], 4, "Analyst", ["1.1"], "OP-06"),
+        _s("1.3", "Enrich with fleet size, service type, annual revenue from Hoover's + state filings + carrier websites",
+           "Enriched CSV with fleet_size, service_type, revenue_range", "≥80% of rows have fleet_size populated; revenue is a range, never a fabricated point estimate",
+           ["D&B Hoover's", "FMCSA QCMobile", "company websites"], 8, "Analyst", ["1.2"], "OP-06"),
+        _s("1.4", "Score every row for mid-market fit (50–500 vehicles + Minnesota domiciled) and tag mid-market=true",
+           "Filtered CSV · mid-market candidates only · 100–250 rows expected",
+           "every retained row has fleet_size IN [50, 500] AND state==MN", ["Excel/Python pandas"], 2, "Analyst", ["1.3"], "OP-06"),
+        _s("1.5", "Pull 3–5 industry benchmark reports (ATA Trucking Profile, ATRI Operational Costs, BLS OEWS 53-3032, EIA diesel, FMCSA enforcement)",
+           "/research/benchmarks/ folder · 5 PDFs + 1 index.md summarizing key numbers",
+           "every benchmark has: source URL, publication date, the 3 numbers we will cite, the cite-ready quote",
+           ["ATA", "ATRI", "BLS OEWS", "EIA STEO", "FMCSA"], 6, "Analyst", [], "OP-01"),
+        _s("1.6", "Lock baseline costs (driver $/hr, fuel $/gal, compliance violation cost, dispatcher hours/load) into ops_workbench bench dict",
+           "Code · industry_benchmarks dict in build_roi_model already wired",
+           "Every constant has a comment-citation pointing at the source document in /research/benchmarks/",
+           ["ops_workbench.py"], 2, "Engineer", ["1.5"], "OP-02"),
+        _s("1.7", "Define 3–4 buyer personas (Small Regional · Mid-Market · Intermodal · Specialized/Hazmat) with documented workflow gaps",
+           "PITCH_DECK.fact_sheets + collateral persona doc",
+           "Each persona has: headline · 3 pains · lead_agent · expected ROI range · contact channel preference",
+           ["ops_workbench.PITCH_DECK.fact_sheets"], 4, "Founder", ["1.4", "1.5"], "OP-04"),
+     ]},
+
+    # ----- PHASE 2 ---------------------------------------------------------
+    {"n": 2, "title": "AI Agent Capability Mapping & Feature Definition",
+     "duration": "3 days", "owner": "Engineer + Founder",
+     "outcome": "A 6-module agent stack, each with autonomy level, quantified KPI band, decision logic, and the exact input/output contract that the rest of the org can build to.",
+     "op_link": "OP-03", "op_link_label": "Open OP-03 AI Architecture",
+     "substeps": [
+        _s("2.1", "Architect the 6 agent modules · Dispatch · Route+Fuel · Compliance · Pricing · Retention · Maintenance",
+           "AI_ARCHITECTURE.modules in ops_workbench.py",
+           "Each module documents: id · name · inputs · outputs · decision_logic · KPI band · autonomy",
+           ["ops_workbench.py"], 4, "Engineer", [], "OP-03"),
+        _s("2.2", "Assign autonomy levels L1 (suggest) / L2 (act with approval) / L3 (act autonomously, audit only)",
+           "Per-module autonomy field with rationale in code comment",
+           "L3 reserved for low-risk reversible actions; L2 default; L1 for pricing-floor and compliance-block scenarios",
+           ["ops_workbench.AI_ARCHITECTURE"], 2, "Founder", ["2.1"], "OP-03"),
+        _s("2.3", "Quantify features (empty-mile 8-15% · fuel 10-18% · violation 40-60% · retention +6-12pp · downtime -20-30%)",
+           "Per-module KPI band stored on AI_ARCHITECTURE.modules[*].kpi",
+           "Every KPI carries a benchmark source ID from Phase 1 step 1.5",
+           ["ATA", "ATRI", "FMCSA"], 3, "Engineer", ["1.5", "2.1"], "OP-03"),
+        _s("2.4", "Design data pipeline · ELD + TMS + fuel card + insurance + telematics + DOT 511",
+           "AI_ARCHITECTURE.data_pipeline · 6 stages (Sources · Ingest · Store · Decide · Act · Observe)",
+           "Each stage names concrete vendors/APIs; no abstract placeholders",
+           ["AI_ARCHITECTURE.data_pipeline"], 4, "Engineer", ["2.1"], "OP-03"),
+        _s("2.5", "Pre-map APIs for top 3 MN TMS · Descartes · McLeod · TMW (or Selerant for hazmat heavy)",
+           "/research/tms_apis/ · 3 markdown docs · auth model + endpoints + rate limits + sandbox availability",
+           "Each TMS has a concrete OAuth or API-key recipe + a tested ping example",
+           ["TMS vendor docs", "Postman"], 4, "Engineer", ["2.4"], "OP-03"),
+        _s("2.6", "Build feature-to-pain-point 2×2 matrix · quantified per persona × per agent",
+           "PITCH_DECK.fact_sheets + a /research/feature_matrix.csv",
+           "Every cell carries a numeric impact range traceable to a benchmark",
+           ["Excel", "PITCH_DECK"], 3, "Founder", ["1.7", "2.3"], "OP-04"),
+     ]},
+
+    # ----- PHASE 3 ---------------------------------------------------------
+    {"n": 3, "title": "Financial Modeling & ROI Quantification",
+     "duration": "4 days", "owner": "Founder + Engineer",
+     "outcome": "A live, recompute-on-demand ROI model with 3 archetypes, 6 savings categories per archetype, 3-yr NPV, payback months, and ±10% sensitivity — every number is benchmark-cited.",
+     "op_link": "OP-02", "op_link_label": "Open OP-02 ROI Modeler",
+     "substeps": [
+        _s("3.1", "Define 3 archetypes · Small Regional 25-75 · Mid-Market 100-250 · Specialized/Hazmat 50-150",
+           "arch_assumptions dict in build_roi_model with fleet defaults + dispatch/fuel/compliance/retention/downtime/claims pct uplifts",
+           "Each archetype label + fleet default + 6 percentage assumptions visible in code",
+           ["ops_workbench.build_roi_model"], 2, "Engineer", [], "OP-02"),
+        _s("3.2", "Codify 6 cost-savings categories per archetype · labor · fuel · compliance · downtime · retention · claims",
+           "by_category_usd output keys returned by /api/workbench/labs/op-02/run",
+           "Every category has a formula visible in build_roi_model; no fudge factors",
+           ["ops_workbench.build_roi_model"], 2, "Engineer", ["3.1"], "OP-02"),
+        _s("3.3", "Compute 3-year NPV @ 10% discount + payback in months",
+           "three_year output: net_y1/y2/y3 + npv_at_10pct + payback_months",
+           "Math reproducible by hand from inputs; matches the recompute UI exactly",
+           ["ops_workbench.build_roi_model"], 2, "Engineer", ["3.2"], "OP-02"),
+        _s("3.4", "Sensitivity analysis · ±10% on annual savings (proxy for fuel/wages/hours)",
+           "sensitivity dict · conservative / base / optimistic",
+           "Bands shown alongside base every recompute; not hidden in code",
+           ["ops_workbench.build_roi_model"], 1, "Engineer", ["3.3"], "OP-02"),
+        _s("3.5", "Scenario switcher · conservative/base/optimistic + archetype + fleet override exposed in UI",
+           "WorkbenchPanel LabOP02 + ConsoleWorkbenchPanel RoiPanel selectors",
+           "Switch updates 6-category breakdown + NPV + payback live, <300ms",
+           ["WorkbenchPanel.jsx", "ConsoleWorkbenchPanel.jsx"], 3, "Engineer", ["3.4"], "OP-02"),
+        _s("3.6", "Source attribution · model returns sources[] every run (ATA · ATRI · BLS · EIA · FMCSA)",
+           "model.sources array",
+           "≥5 distinct sources cited; no source listed without an in-formula citation",
+           ["ops_workbench.build_roi_model"], 1, "Founder", ["3.2"], "OP-02"),
+     ]},
+
+    # ----- PHASE 4 ---------------------------------------------------------
+    {"n": 4, "title": "Detailed Target Company List & Segmentation",
+     "duration": "2 days", "owner": "Analyst + Founder",
+     "outcome": "A 15-25 row Minnesota target list with fleet, service, revenue range, TMS in use, AI-readiness score, persona, sales stage, and recommended contact method.",
+     "op_link": "OP-06", "op_link_label": "Refresh OP-06 Target List",
+     "substeps": [
+        _s("4.1", "Pull the curated MN_FREIGHT_SEED list from fmcsa_lookup.py into db.prospects (idempotent)",
+           "≥14 real companies upserted · all is_synthetic=false · DOT/MC populated where known",
+           "Each prospect has verification_source set",
+           ["fmcsa_lookup.MN_FREIGHT_SEED"], 1, "Engineer", [], "OP-06"),
+        _s("4.2", "Enrich with TMS in use (best-effort from public sources)",
+           "tms_vendor column populated where discoverable; left null where not — never guessed",
+           "Null cells outnumber confidently-set cells until verified",
+           ["LinkedIn", "carrier websites", "industry pubs"], 4, "Analyst", ["4.1"], "OP-06"),
+        _s("4.3", "Score AI readiness 0-5 per prospect (TMS modernity · ELD vendor · IT bench · exec sponsor signal)",
+           "ai_readiness column on db.prospects",
+           "Every score has a 1-line rationale in notes",
+           ["Custom rubric in /research/ai_readiness.md"], 3, "Founder", ["4.2"], "OP-06"),
+        _s("4.4", "Segment by persona × sales stage (cold / warm / hot / pilot-ready)",
+           "persona + sales_stage columns on db.prospects",
+           "Top-of-funnel ≤30% in hot/pilot-ready; cohort split visible in dashboard",
+           ["DesignPartnersPanel"], 2, "Founder", ["4.3"], "OP-06"),
+        _s("4.5", "Recommend contact method per row (cold call · LinkedIn warm intro · referral · event)",
+           "contact_method column",
+           "Method matches sales_stage rule book (cold → cold call/LinkedIn; warm → referral)",
+           ["Operator rule book"], 1, "Founder", ["4.4"], "OP-06"),
+     ]},
+
+    # ----- PHASE 5 ---------------------------------------------------------
+    {"n": 5, "title": "Benefits & Features Deep-Dive Document",
+     "duration": "2–3 days", "owner": "Founder + Engineer",
+     "outcome": "A polished 20-30 page operator-grade technical brief PDF that a CFO can read end-to-end with every claim benchmark-traceable.",
+     "op_link": "OP-05", "op_link_label": "Generate OP-05 Brief PDF",
+     "substeps": [
+        _s("5.1", "Author the executive overview (1 page · 5 headline bullets)",
+           "TECHNICAL_DOC_SECTIONS[0] in ops_workbench.py",
+           "Reads to a non-technical exec in <2 minutes",
+           ["ops_workbench.TECHNICAL_DOC_SECTIONS"], 2, "Founder", [], "OP-05"),
+        _s("5.2", "Six module deep-dives · ~3 pages each (M1-M6)",
+           "TECHNICAL_DOC_SECTIONS[1..6]",
+           "Each section covers inputs · decision · action · KPI · failure modes",
+           ["AI_ARCHITECTURE.modules"], 8, "Engineer", ["2.1"], "OP-05"),
+        _s("5.3", "ROI analysis · 2 illustrative case studies (Small Regional 50t · Mid-Market 175t)",
+           "TECHNICAL_DOC_SECTIONS[7]",
+           "Numbers match build_roi_model output to the dollar",
+           ["build_roi_model"], 2, "Engineer", ["3.3", "5.2"], "OP-05"),
+        _s("5.4", "Implementation roadmap · 4 phases (Readiness · Baseline · Pilot · Scale)",
+           "TECHNICAL_DOC_SECTIONS[8]",
+           "Every phase has a duration, exit criteria, and operator action",
+           ["roadmap_template"], 2, "Founder", [], "OP-05"),
+        _s("5.5", "Minnesota opportunity snapshot + technical appendix (APIs · auth · audit · LLM substrate)",
+           "TECHNICAL_DOC_SECTIONS[9]",
+           "API table mirrors AI_ARCHITECTURE.api_surface exactly",
+           ["AI_ARCHITECTURE.api_surface"], 2, "Engineer", ["2.4"], "OP-05"),
+        _s("5.6", "Render to PDF via reportlab (`generate_technical_doc_pdf`)",
+           "PDF file at /app/backend/static_workbench/op05_*.pdf",
+           "First 4 bytes = %PDF, size >5KB, opens in any PDF reader",
+           ["ops_workbench.generate_technical_doc_pdf"], 1, "Engineer", ["5.1", "5.2", "5.3", "5.4", "5.5"], "OP-05"),
+     ]},
+
+    # ----- PHASE 6 ---------------------------------------------------------
+    {"n": 6, "title": "Sales Collateral & Pitch Deck Development",
+     "duration": "2 days", "owner": "Founder",
+     "outcome": "A 12-slide pitch deck PDF + 4 persona fact sheets + a Readiness Assessment + a competitive brief — ready for live discovery calls.",
+     "op_link": "OP-04", "op_link_label": "Generate OP-04 Deck PDF",
+     "substeps": [
+        _s("6.1", "Compose the 12-slide pitch (problem · solution · 6 modules · ROI · 2 case profiles · competitive · pricing · ask)",
+           "PITCH_DECK.slides in ops_workbench.py",
+           "Slide count == 12, every slide has a title + (subtitle | bullets)",
+           ["ops_workbench.PITCH_DECK"], 4, "Founder", ["1.7", "5.2"], "OP-04"),
+        _s("6.2", "4 persona fact sheets · one per buyer persona · headline + 3 pains + lead agent + ROI",
+           "PITCH_DECK.fact_sheets[0..3]",
+           "Every fact sheet has a quantified ROI range from build_roi_model",
+           ["PITCH_DECK.fact_sheets"], 2, "Founder", ["1.7", "3.5"], "OP-04"),
+        _s("6.3", "Readiness Assessment workbook · 3 areas (Data · Process · Tech & Org) · 4-5 questions each",
+           "PITCH_DECK.readiness_assessment",
+           "Yes/no answer model; takes a prospect <15 min to complete",
+           ["PITCH_DECK.readiness_assessment"], 2, "Founder", [], "OP-04"),
+        _s("6.4", "Competitive brief vs Descartes / Omnitracs / Geotab / internal-build",
+           "PITCH_DECK.competitive_brief",
+           "Each comp has a 2-sentence positioning statement and an explicit ABOVE-the-stack framing",
+           ["PITCH_DECK.competitive_brief"], 2, "Founder", [], "OP-04"),
+        _s("6.5", "Render deck to PDF (`generate_pitch_deck_pdf`) · landscape · brand fonts",
+           "/app/backend/static_workbench/op04_*.pdf",
+           "Deck PDF >8KB, 12+ pages, opens cleanly",
+           ["ops_workbench.generate_pitch_deck_pdf"], 1, "Engineer", ["6.1"], "OP-04"),
+     ]},
+
+    # ----- PHASE 7 ---------------------------------------------------------
+    {"n": 7, "title": "Go-to-Market Strategy & Outreach Plan",
+     "duration": "2 days", "owner": "Founder",
+     "outcome": "Channel mix per persona, a 30/60/90 outreach sequence per persona, and a signed pilot agreement template with success metrics declared up-front.",
+     "op_link": None,
+     "substeps": [
+        _s("7.1", "Channel mix · direct vs partner per persona (Small Regional → direct; Specialized → direct + insurance-broker partner; Mid-Market → hybrid)",
+           "/research/gtm_channel_mix.md",
+           "Each persona has a primary and a fallback channel with reasoning",
+           ["Operator playbook"], 2, "Founder", ["1.7"], None),
+        _s("7.2", "30/60/90-day outreach sequence per persona (LinkedIn nudges · executive briefing · ROI workbook share · pilot agreement)",
+           "/research/outreach_sequences.md · 4 persona × 3 cadence rows",
+           "Each touch carries a CTA and a success indicator",
+           ["LinkedIn Sales Nav", "Resend"], 4, "Founder", ["7.1"], None),
+        _s("7.3", "Pilot agreement template · 6-month term · $25-40k all-in · success-metric definition",
+           "/research/pilot_agreement_template.md",
+           "Template names ≥3 success metrics tied to KPIs from Phase 2 step 2.3",
+           ["legal_review", "PITCH_DECK"], 3, "Founder", ["2.3", "3.5"], None),
+        _s("7.4", "Decision checkpoints @ month 4 of pilot · agreed in writing pre-pilot",
+           "Pilot template appendix · checkpoint clause",
+           "Either party can pause/terminate at month 4 if metrics aren't on the trajectory line",
+           ["pilot_agreement"], 1, "Founder", ["7.3"], None),
+     ]},
+
+    # ----- PHASE 8 ---------------------------------------------------------
+    {"n": 8, "title": "Reporting, Documentation & Continuous Refinement",
+     "duration": "1–2 days", "owner": "Founder + Engineer",
+     "outcome": "Weekly lessons-learned cadence + a pipeline + decision-checkpoint dashboard so every prospect interaction informs the next.",
+     "op_link": None,
+     "substeps": [
+        _s("8.1", "Weekly lessons-learned log · cadence stand-up · who learned what · what changes for next cycle",
+           "/research/lessons_log.md · appended every Friday",
+           "≥3 lessons per week or note 'nothing new' explicitly",
+           ["calendar reminder"], 1, "Founder", [], None),
+        _s("8.2", "Pipeline reporting dashboard · prospect count by stage × persona × week",
+           "Existing DesignPartnersPanel + new charts as needed",
+           "Visible to founder + analyst on a single screen",
+           ["DesignPartnersPanel"], 3, "Engineer", [], None),
+        _s("8.3", "Decision checkpoint cadence · update workbench_decisions monthly · re-flip when evidence changes",
+           "PATCH /api/workbench/decisions/{id} every month or when a pilot insight contradicts the current choice",
+           "decisions.updated_at within last 30 days for active decisions",
+           ["WorkbenchPanel DecisionsTracker"], 1, "Founder", [], None),
+        _s("8.4", "Audit trail review · weekly verify the immutable chain via /api/audit/verify",
+           "Chain ok=true every Friday; any failure escalated immediately",
+           "Failure triggers incident comm + freeze on rate-floor overrides until resolved",
+           ["audit_trail.verify", "RiskGuardPanel"], 1, "Engineer", [], None),
+     ]},
+]
+
+
+def deep_steps_summary() -> Dict[str, int]:
+    total_substeps = sum(len(p["substeps"]) for p in PHASES_DEEP)
+    total_hours = sum(s["hours"] for p in PHASES_DEEP for s in p["substeps"])
+    return {"phases": len(PHASES_DEEP), "substeps": total_substeps,
+            "estimated_hours": total_hours,
+            "estimated_days": round(total_hours / 8.0, 1)}
 
 
 # ---------- MATERIALS · 5 + TOOLS · 5 ----------
@@ -234,8 +490,12 @@ class LabRunRequest(BaseModel):
 
 # ---------- DB helpers (idempotent seed) ----------
 
-async def seed_workbench(db) -> Dict[str, int]:
-    """Seed risks + decisions + phase state. Idempotent on id."""
+async def seed_workbench(db, *, force_reseed_phases: bool = False) -> Dict[str, int]:
+    """Seed risks + decisions + phase state. Idempotent on id.
+
+    When force_reseed_phases=True, replaces the phase docs with the PHASES_DEEP
+    structure (used when the deep substep schema is upgraded).
+    """
     risks_inserted = 0
     for r in RISKS:
         exists = await db.workbench_risks.find_one({"id": r["id"]}, {"_id": 0})
@@ -261,19 +521,37 @@ async def seed_workbench(db) -> Dict[str, int]:
             })
             decisions_inserted += 1
 
+    # Decide which phase structure to seed
+    use_deep = True
+    phase_source = PHASES_DEEP if use_deep else PHASES
+
     phases_inserted = 0
-    for p in PHASES:
-        exists = await db.workbench_phases.find_one({"n": p["n"]}, {"_id": 0})
-        if not exists:
-            await db.workbench_phases.insert_one({
+    phases_upgraded = 0
+    for p in phase_source:
+        existing = await db.workbench_phases.find_one({"n": p["n"]}, {"_id": 0})
+        # Detect whether the existing doc uses the legacy flat-string schema
+        legacy = bool(existing and existing.get("steps") and isinstance(existing["steps"][0], dict)
+                       and existing["steps"][0].get("text") and "deliverable" not in existing["steps"][0])
+        if not existing or force_reseed_phases or legacy:
+            doc = {
                 "n": p["n"], "title": p["title"], "duration": p["duration"],
-                "steps": [{"text": s, "status": "todo", "notes": None} for s in p["steps"]],
+                "owner": p.get("owner"), "outcome": p.get("outcome"),
+                "op_link": p.get("op_link"), "op_link_label": p.get("op_link_label"),
+                "steps": p.get("substeps") or [
+                    {"text": s, "status": "todo", "notes": None} for s in p.get("steps", [])
+                ],
                 "created_at": _utcnow_iso(),
                 "updated_at": _utcnow_iso(),
-            })
-            phases_inserted += 1
+            }
+            if existing:
+                await db.workbench_phases.replace_one({"n": p["n"]}, doc)
+                phases_upgraded += 1
+            else:
+                await db.workbench_phases.insert_one(doc)
+                phases_inserted += 1
 
-    return {"risks_inserted": risks_inserted, "decisions_inserted": decisions_inserted, "phases_inserted": phases_inserted}
+    return {"risks_inserted": risks_inserted, "decisions_inserted": decisions_inserted,
+            "phases_inserted": phases_inserted, "phases_upgraded": phases_upgraded}
 
 
 # ---------- PDF generation for OP-01 ----------
