@@ -921,26 +921,40 @@ function ProspectsPanel() {
   const [count, setCount] = useState(8);
   const [generating, setGenerating] = useState(false);
   const [prospects, setProspects] = useState([]);
+  const [summary, setSummary] = useState({ total: 0, synthetic: 0, verified: 0, real: 0 });
   const [filterIndustry, setFilterIndustry] = useState("");
-  const [draftFor, setDraftFor] = useState(null); // {prospect, pkg, loading}
+  const [sourceFilter, setSourceFilter] = useState("real"); // "real" | "synthetic" | "all"
+  const [verifiedOnly, setVerifiedOnly] = useState(true);
+  const [draftFor, setDraftFor] = useState(null);
+  const [seeding, setSeeding] = useState(false);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvResult, setCsvResult] = useState(null);
+  const [tailoring, setTailoring] = useState(null);
 
   const load = async (ind) => {
     try {
-      const params = ind ? { industry: ind } : {};
+      const params = {};
+      if (ind) params.industry = ind;
+      if (verifiedOnly) params.verified_only = true;
+      if (sourceFilter !== "all") params.source = sourceFilter;
       const { data } = await api.get("/prospects", { params });
-      setProspects(data);
+      setProspects(data.prospects || []);
+      setSummary(data.summary || { total: 0, synthetic: 0, verified: 0, real: 0 });
     } catch {
       toast.error("Failed to load prospects.");
     }
   };
 
-  useEffect(() => { load(filterIndustry); }, [filterIndustry]);
+  useEffect(() => { load(filterIndustry); }, [filterIndustry, sourceFilter, verifiedOnly]);
 
   const generate = async () => {
     setGenerating(true);
     try {
       const { data } = await api.post("/prospects/generate", { industry, count }, { timeout: 90000 });
-      toast.success(`Generated ${data.count} ${industry.replace(/_/g, " ")} prospects`);
+      toast.warning(`Generated ${data.count} SYNTHETIC ${industry.replace(/_/g, " ")} prospects — flip toggle to view`);
+      setSourceFilter("synthetic");
       setFilterIndustry(industry);
       await load(industry);
     } catch (e) {
@@ -948,6 +962,42 @@ function ProspectsPanel() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const seedReal = async () => {
+    if (!confirm("Seed the curated MN freight registry? Real verifiable companies will land in your leads pipe (idempotent).")) return;
+    setSeeding(true);
+    try {
+      const { data } = await api.post("/leads/seed-real-mn");
+      toast.success(`Seeded · ${data.inserted} new, ${data.updated} refreshed (${data.total_in_seed} in registry)`);
+      setSourceFilter("real");
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Seed failed.");
+    } finally { setSeeding(false); }
+  };
+
+  const importCsv = async () => {
+    if (!csvText.trim()) { toast.error("Paste CSV rows first."); return; }
+    setCsvBusy(true);
+    try {
+      const lines = csvText.trim().split(/\r?\n/);
+      if (lines.length < 2) throw new Error("CSV needs header + at least 1 row");
+      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      const rows = lines.slice(1).map((line) => {
+        // Naive split; user can use simple CSVs. Quotes not handled.
+        const vals = line.split(",").map((v) => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
+        return obj;
+      }).filter((r) => r.company && r.email);
+      const { data } = await api.post("/leads/import-csv", { rows, industry_default: industry });
+      setCsvResult(data);
+      toast.success(`CSV · ${data.inserted} added, ${data.verified} verified, ${data.rejected_count} rejected`);
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || e.message || "CSV import failed.");
+    } finally { setCsvBusy(false); }
   };
 
   const del = async (id) => {
@@ -972,55 +1022,122 @@ function ProspectsPanel() {
     }
   };
 
+  const tailorReal = async (p) => {
+    setTailoring(p.id);
+    try {
+      const { data } = await api.post(`/leads/${p.id}/tailor-hook`, {}, { timeout: 60000 });
+      toast.success("Tailored from verifiable facts");
+      await load(filterIndustry);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Tailor failed.");
+    } finally { setTailoring(null); }
+  };
+
   const scoreColor = (s) =>
     s >= 85 ? "#ccff00" : s >= 70 ? "#00ffff" : s >= 55 ? "#7c5cff" : "#ff3b8a";
 
   return (
     <div className="space-y-4" data-testid="prospects-panel">
-      {/* Generate strip */}
-      <div className="deck-card p-6 relative" data-testid="prospects-generate">
+      {/* SYNTHETIC WARNING BANNER */}
+      {summary.synthetic > 0 && (
+        <div className="border border-[#ffce4f]/40 bg-[#ffce4f]/05 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" data-testid="synthetic-warning">
+          <div className="flex items-center gap-3">
+            <span className="mono-label text-[10px] text-[#ffce4f]">⚠ SYNTHETIC · DEMO ONLY</span>
+            <span className="font-mono-tech text-[11px] text-white/85">
+              <strong className="text-[#ffce4f]">{summary.synthetic}</strong> records in your pool are AI-fabricated (companies, names, emails — none real).
+              Default view hides them. Toggle to inspect or delete.
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button data-testid="src-real" onClick={() => setSourceFilter("real")} className="mono-label text-[10px] px-3 py-1.5" style={{ border: `1px solid ${sourceFilter === "real" ? "#ccff00" : "rgba(255,255,255,0.10)"}`, color: sourceFilter === "real" ? "#ccff00" : "rgba(255,255,255,0.55)" }}>REAL · {summary.real}</button>
+            <button data-testid="src-synthetic" onClick={() => setSourceFilter("synthetic")} className="mono-label text-[10px] px-3 py-1.5" style={{ border: `1px solid ${sourceFilter === "synthetic" ? "#ffce4f" : "rgba(255,255,255,0.10)"}`, color: sourceFilter === "synthetic" ? "#ffce4f" : "rgba(255,255,255,0.55)" }}>SYNTHETIC · {summary.synthetic}</button>
+            <button data-testid="src-all" onClick={() => setSourceFilter("all")} className="mono-label text-[10px] px-3 py-1.5" style={{ border: `1px solid ${sourceFilter === "all" ? "#00ffff" : "rgba(255,255,255,0.10)"}`, color: sourceFilter === "all" ? "#00ffff" : "rgba(255,255,255,0.55)" }}>ALL · {summary.total}</button>
+          </div>
+        </div>
+      )}
+
+      {/* REAL-LEAD ACTIONS */}
+      <div className="deck-card p-6 relative" data-testid="real-leads-actions">
         <CornerBrackets />
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:justify-between">
           <div>
             <div className="mono-label text-[#ccff00] mb-1 flex items-center gap-2">
-              <Lightning size={12} weight="bold" /> PROSPECTS · MSP-AREA LEAD MINING
+              <Lightning size={12} weight="bold" /> LEADS · VERIFIABLE SOURCES
             </div>
-            <p className="text-xs text-white/55 max-w-xl leading-relaxed">
-              JADE synthesizes realistic Minneapolis-St. Paul B2B prospects per industry —
-              role, company, plausible email, pain-point + a tailored hook + a fit score. Then drafts
-              the cold-outreach package on demand.
+            <p className="text-xs text-white/65 max-w-2xl leading-relaxed">
+              Seed real MN freight companies from the FMCSA-anchored registry (DOT#/MC# verifiable at safer.fmcsa.dot.gov).
+              Or bulk-import your own CSV — every row is email-format + domain-resolved before it lands.
+              The agent's pain + hook is auto-tailored from <strong className="text-[#ccff00]">verifiable facts only</strong>.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <select
-              data-testid="prospects-industry-select"
-              className="input-tech text-xs py-2"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-            >
-              {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
-            </select>
-            <input
-              data-testid="prospects-count-input"
-              type="number"
-              min={1}
-              max={12}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(12, parseInt(e.target.value || "1", 10))))}
-              className="input-tech text-xs py-2 w-[80px]"
-            />
-            <button
-              data-testid="prospects-generate-btn"
-              onClick={generate}
-              disabled={generating}
-              className="btn-jade inline-flex items-center gap-2 px-5"
-            >
-              <Lightning size={14} weight="bold" />
-              {generating ? "MINING…" : "GENERATE"}
+            <button data-testid="seed-real-mn-btn" onClick={seedReal} disabled={seeding} className="btn-jade text-xs px-4 disabled:opacity-50">
+              {seeding ? "SEEDING…" : "+ SEED REAL MN FREIGHT"}
             </button>
+            <button data-testid="import-csv-btn" onClick={() => setCsvOpen((v) => !v)} className="btn-ghost text-xs px-4">
+              {csvOpen ? "✕ CLOSE CSV" : "↑ IMPORT CSV"}
+            </button>
+            <label className="flex items-center gap-2 mono-label text-[10px] text-white/85 cursor-pointer">
+              <input data-testid="verified-only-toggle" type="checkbox" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} />
+              VERIFIED EMAILS ONLY
+            </label>
           </div>
         </div>
+
+        {csvOpen && (
+          <div className="mt-5 border-t border-white/10 pt-4" data-testid="csv-import-form">
+            <div className="mono-label text-[10px] text-[#00ffff]">PASTE CSV · HEADER + ROWS</div>
+            <div className="font-mono-tech text-[10px] text-white/55 mt-1 leading-snug">
+              Required headers: <span className="text-[#ccff00]">company,email</span> · Optional: name,title,industry,city,state,company_size,website,dot_number,mc_number,notes
+            </div>
+            <textarea
+              data-testid="csv-textarea"
+              rows={6}
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              className="input-tech text-xs w-full mt-2 font-mono-tech"
+              placeholder={`company,email,name,title,city,state\nAcme Freight,ops@acme.com,Jane Smith,VP Ops,Plymouth,MN`}
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <button data-testid="csv-submit-btn" onClick={importCsv} disabled={csvBusy} className="btn-jade text-xs disabled:opacity-50">
+                {csvBusy ? "IMPORTING…" : "▶ IMPORT"}
+              </button>
+              {csvResult && (
+                <span className="font-mono-tech text-[11px] text-white/85">
+                  · <span className="text-[#ccff00]">{csvResult.inserted}</span> added · <span className="text-[#00ffff]">{csvResult.verified}</span> verified · <span className="text-[#ff3b8a]">{csvResult.rejected_count}</span> rejected
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Synthetic generator — kept but clearly labeled */}
+      <details className="deck-card p-6 relative" data-testid="prospects-generate">
+        <CornerBrackets />
+        <summary className="cursor-pointer flex items-center gap-2">
+          <span className="mono-label text-[#ffce4f] flex items-center gap-2">
+            <Lightning size={12} weight="bold" /> SYNTHETIC GENERATOR · DEMO USE ONLY
+          </span>
+          <span className="font-mono-tech text-[10px] text-white/40">(click to expand · for screenshots / role-play / agent dry-runs)</span>
+        </summary>
+        <p className="text-xs text-white/55 max-w-xl leading-relaxed mt-3">
+          ⚠ Generates AI-fabricated MSP-area prospects. Companies, names, and emails are NOT real. Useful only for demoing the agent flow — never for actual outreach. Use the &quot;Seed Real MN Freight&quot; button above for real leads.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap mt-4">
+          <select data-testid="prospects-industry-select" className="input-tech text-xs py-2" value={industry} onChange={(e) => setIndustry(e.target.value)}>
+            {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+          </select>
+          <input data-testid="prospects-count-input" type="number" min={1} max={12} value={count}
+            onChange={(e) => setCount(Math.max(1, Math.min(12, parseInt(e.target.value || "1", 10))))}
+            className="input-tech text-xs py-2 w-[80px]" />
+          <button data-testid="prospects-generate-btn" onClick={generate} disabled={generating}
+            className="btn-jade inline-flex items-center gap-2 px-5" style={{ background: "#ffce4f", color: "#0a0c18" }}>
+            <Lightning size={14} weight="bold" />
+            {generating ? "FABRICATING…" : "GENERATE SYNTHETIC"}
+          </button>
+        </div>
+      </details>
 
       {/* Filter + list */}
       <div className="deck-card relative" data-testid="prospects-table">
@@ -1071,23 +1188,58 @@ function ProspectsPanel() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="text-white font-display font-bold">{p.company}</div>
-                      <div className="font-mono-tech text-[11px] text-white/65 mt-1">{p.name} · {p.title}</div>
-                      <div className="font-mono-tech text-[10px] text-white/45 mt-0.5">
-                        {p.email} · {p.city} · {p.company_size}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-white font-display font-bold">{p.company}</div>
+                        {p.is_synthetic && (
+                          <span className="mono-label text-[9px] px-1.5 py-0.5 border border-[#ffce4f]/40 text-[#ffce4f]" title="AI-fabricated · not a real company">SYNTH</span>
+                        )}
+                        {p.is_verified && !p.is_synthetic && (
+                          <span className="mono-label text-[9px] px-1.5 py-0.5 border border-[#ccff00]/40 text-[#ccff00]" title={p.verification_source || "verified"}>✓ VERIFIED</span>
+                        )}
+                        {p.dot_number && (
+                          <span className="mono-label text-[9px] px-1.5 py-0.5 border border-[#00ffff]/40 text-[#00ffff]" title={`USDOT ${p.dot_number}`}>DOT {p.dot_number}</span>
+                        )}
                       </div>
+                      <div className="font-mono-tech text-[11px] text-white/65 mt-1">
+                        {p.name ? `${p.name} · ${p.title}` : <span className="text-[#ffce4f]">{p.title || "(enrich via Apollo / LinkedIn)"}</span>}
+                      </div>
+                      <div className="font-mono-tech text-[10px] text-white/45 mt-0.5">
+                        {p.email || "—"} · {p.city || "—"}{p.state ? `, ${p.state}` : ""} · {p.company_size || "—"}
+                      </div>
+                      {p.website && (
+                        <a href={p.website} target="_blank" rel="noreferrer" className="font-mono-tech text-[10px] text-[#00ffff] hover:underline mt-0.5 block">{p.website}</a>
+                      )}
                     </td>
                     <td className="p-4 w-[160px] mono-label text-[#00ffff] text-[10px]">
                       {p.industry.replace(/_/g, " ").toUpperCase()}
                     </td>
                     <td className="p-4 max-w-[440px]">
-                      <div className="text-xs text-white/80 leading-relaxed">{p.pain_point}</div>
-                      <div className="font-mono-tech text-[10px] text-[#ccff00] mt-2 italic leading-relaxed">
-                        “{p.hook}”
-                      </div>
+                      {p.pain_point ? (
+                        <>
+                          <div className="text-xs text-white/80 leading-relaxed">{p.pain_point}</div>
+                          {p.hook && (
+                            <div className="font-mono-tech text-[10px] text-[#ccff00] mt-2 italic leading-relaxed">
+                              “{p.hook}”
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="font-mono-tech text-[11px] text-white/40">// no tailored pain yet · click TAILOR HOOK to ground LLM in verifiable facts</div>
+                      )}
                     </td>
-                    <td className="p-4 w-[180px]">
+                    <td className="p-4 w-[200px]">
                       <div className="flex flex-col gap-1.5">
+                        {!p.is_synthetic && (
+                          <button
+                            data-testid={`prospect-tailor-${p.id}`}
+                            onClick={() => tailorReal(p)}
+                            disabled={tailoring === p.id}
+                            className="btn-jade text-xs py-1.5 inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            style={{ background: "#7c5cff", color: "#ffffff" }}
+                          >
+                            {tailoring === p.id ? "TAILORING…" : "⚙ TAILOR HOOK"}
+                          </button>
+                        )}
                         <button
                           data-testid={`prospect-email-${p.id}`}
                           onClick={() => draftEmail(p)}

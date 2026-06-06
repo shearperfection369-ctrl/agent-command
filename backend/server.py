@@ -3775,10 +3775,14 @@ class ProspectRequest(BaseModel):
 
 @api.post("/prospects/generate")
 async def prospects_generate(body: ProspectRequest, _: str = Depends(require_admin)):
-    """LLM-generate a list of realistic Minneapolis-area B2B prospects for a given industry.
+    """LLM-generate a list of *synthetic* Minneapolis-area B2B prospects for a given industry.
 
-    These are AI-synthesized — useful for outreach planning, role-play, and seeding the leads pipe.
-    They are NOT pulled from a real lead database (no Apollo/ZoomInfo wired). Saved to db.prospects.
+    These are AI-fabricated — names, companies, emails are NOT real. Useful only
+    for demo screenshots, role-play, agent dry-runs. Every record is stamped
+    `is_synthetic: true` so it cannot be confused with verifiable leads.
+
+    For REAL leads use POST /api/leads/seed-real-mn (curated MN freight) or
+    POST /api/leads/import-csv (your own list).
     """
     count = max(1, min(int(body.count or 8), 12))
     hint = INDUSTRY_PROSPECT_HINTS.get(body.industry, INDUSTRY_PROSPECT_HINTS["general"])
@@ -3825,6 +3829,9 @@ async def prospects_generate(body: ProspectRequest, _: str = Depends(require_adm
             "recommended_agent": p.get("recommended_agent", "qualify_lead"),
             "created_at": now,
             "contacted": False,
+            "is_synthetic": True,
+            "is_verified": False,
+            "verification_source": "ai_synthesized",
         })
     if docs:
         await db.prospects.insert_many(docs)
@@ -3837,10 +3844,267 @@ async def prospects_generate(body: ProspectRequest, _: str = Depends(require_adm
 
 
 @api.get("/prospects")
-async def prospects_list(industry: Optional[str] = None, _: str = Depends(require_admin)):
-    q = {"industry": industry} if industry else {}
-    docs = await db.prospects.find(q, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
-    return docs
+async def prospects_list(industry: Optional[str] = None, verified_only: bool = False,
+                          source: Optional[str] = None,  # "real" | "synthetic"
+                          _: str = Depends(require_admin)):
+    q: Dict[str, Any] = {}
+    if industry:
+        q["industry"] = industry
+    if verified_only:
+        q["is_verified"] = True
+    if source == "real":
+        q["is_synthetic"] = {"$ne": True}
+    elif source == "synthetic":
+        q["is_synthetic"] = True
+    docs = await db.prospects.find(q, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+    # Summary banner data
+    total = await db.prospects.count_documents({})
+    synthetic = await db.prospects.count_documents({"is_synthetic": True})
+    verified = await db.prospects.count_documents({"is_verified": True})
+    real = await db.prospects.count_documents({"is_synthetic": {"$ne": True}})
+    return {
+        "prospects": docs,
+        "count": len(docs),
+        "summary": {"total": total, "synthetic": synthetic, "verified": verified, "real": real},
+    }
+
+
+# ============================================================
+# REAL LEADS · FMCSA-seeded MN freight + CSV bulk import
+# Replaces the synthetic-only prospects path.
+# ============================================================
+import fmcsa_lookup as fmcsa_mod
+
+
+@api.get("/leads/fmcsa-status")
+async def leads_fmcsa_status(_: str = Depends(require_admin)):
+    return fmcsa_mod.status()
+
+
+@api.post("/leads/seed-real-mn")
+async def leads_seed_real_mn(industry: Optional[str] = None, _: str = Depends(require_admin)):
+    """Seed the curated MN freight registry. Idempotent — re-running won't dupe
+    (we key on dot_number when present, else on company name)."""
+    seed = fmcsa_mod.seed_for_industry(industry)
+    inserted = 0
+    updated = 0
+    now = _utcnow_iso()
+    for c in seed:
+        # Idempotent key — DOT# preferred (registry-unique), else company name
+        match = {"dot_number": c["dot_number"]} if c.get("dot_number") else {"company": c["company"]}
+        doc = {
+            "id": str(uuid.uuid4()),
+            "company": c["company"],
+            "industry": c["industry"],
+            "city": c.get("city", "—"),
+            "state": c.get("state"),
+            "zip": c.get("zip"),
+            "website": c.get("website"),
+            "company_size": c.get("company_size"),
+            "ticker": c.get("ticker"),
+            "dot_number": c.get("dot_number"),
+            "mc_number": c.get("mc_number"),
+            "name": None,  # no individual contact — must enrich
+            "title": "(enrich via Apollo / LinkedIn)",
+            "email": (c.get("contact_email") or "").lower(),
+            "contact_kind": c.get("contact_kind", "generic"),
+            "pain_point": "",  # set by tailor-hook
+            "hook": "",
+            "jade_fit_score": 80,  # FMCSA-anchored leads are pre-qualified
+            "recommended_agent": "qualify_lead",
+            "is_synthetic": False,
+            "is_verified": fmcsa_mod.is_email_format_valid(c.get("contact_email", "")),
+            "verification_source": "curated_seed",
+            "notes": c.get("notes", ""),
+            "contacted": False,
+            "created_at": now,
+        }
+        # Drop fields when updating an existing row so we don't overwrite the
+        # operator's edits (only refresh registry-anchored fields).
+        existing = await db.prospects.find_one(match, {"_id": 0, "id": 1})
+        if existing:
+            await db.prospects.update_one(match, {"$set": {
+                "company": doc["company"], "industry": doc["industry"], "website": doc["website"],
+                "dot_number": doc["dot_number"], "mc_number": doc["mc_number"],
+                "company_size": doc["company_size"], "is_synthetic": False,
+                "verification_source": doc["verification_source"], "updated_at": now,
+            }})
+            updated += 1
+        else:
+            await db.prospects.insert_one(doc)
+            inserted += 1
+    return {"inserted": inserted, "updated": updated, "total_in_seed": len(seed),
+            "live_lookups_active": fmcsa_mod.is_live()}
+
+
+class CsvImportRow(BaseModel):
+    """One row of an imported CSV. company + email are required; rest optional."""
+    company: str
+    email: str
+    name: Optional[str] = None
+    title: Optional[str] = None
+    industry: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    company_size: Optional[str] = None
+    website: Optional[str] = None
+    dot_number: Optional[str] = None
+    mc_number: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CsvImportBody(BaseModel):
+    rows: List[CsvImportRow]
+    industry_default: str = "freight_brokerage"
+
+
+@api.post("/leads/import-csv")
+async def leads_import_csv(body: CsvImportBody, _: str = Depends(require_admin)):
+    """Bulk import operator-supplied leads. Validates email format + domain
+    resolves; only emails passing BOTH checks land with is_verified=True.
+
+    Idempotent on (company + email) — re-importing the same row updates."""
+    now = _utcnow_iso()
+    inserted = 0
+    updated = 0
+    rejected: List[Dict] = []
+    verified_count = 0
+
+    for row in body.rows:
+        email = (row.email or "").strip().lower()
+        if not email or not row.company.strip():
+            rejected.append({"company": row.company, "email": email, "reason": "missing company or email"})
+            continue
+        ver = await fmcsa_mod.verify_email(email)
+        if not ver["format_ok"]:
+            rejected.append({"company": row.company, "email": email, "reason": "invalid email format"})
+            continue
+        if ver["ok"]:
+            verified_count += 1
+        doc = {
+            "id": str(uuid.uuid4()),
+            "company": row.company.strip(),
+            "industry": row.industry or body.industry_default,
+            "city": row.city or "",
+            "state": row.state,
+            "company_size": row.company_size,
+            "website": row.website,
+            "dot_number": row.dot_number,
+            "mc_number": row.mc_number,
+            "name": row.name,
+            "title": row.title or "",
+            "email": email,
+            "pain_point": "",
+            "hook": "",
+            "jade_fit_score": 75,
+            "recommended_agent": "qualify_lead",
+            "is_synthetic": False,
+            "is_verified": ver["ok"],
+            "verification_source": "csv_import",
+            "verification_detail": ver,
+            "notes": row.notes or "",
+            "contacted": False,
+            "created_at": now,
+        }
+        match = {"company": doc["company"], "email": doc["email"]}
+        existing = await db.prospects.find_one(match, {"_id": 0, "id": 1})
+        if existing:
+            await db.prospects.update_one(match, {"$set": {
+                **doc, "id": existing["id"], "updated_at": now, "created_at": existing.get("created_at", now),
+            }})
+            updated += 1
+        else:
+            await db.prospects.insert_one(doc)
+            inserted += 1
+
+    return {
+        "inserted": inserted, "updated": updated, "verified": verified_count,
+        "rejected": rejected, "rejected_count": len(rejected),
+        "total_submitted": len(body.rows),
+    }
+
+
+@api.post("/leads/{pid}/enrich-fmcsa")
+async def leads_enrich_fmcsa(pid: str, _: str = Depends(require_admin)):
+    """Pull a fresh SAFER snapshot for a lead with a DOT#. Requires FMCSA_WEBKEY."""
+    p = await db.prospects.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Lead not found")
+    dot = p.get("dot_number")
+    if not dot:
+        raise HTTPException(400, "Lead has no DOT number to enrich")
+    if not fmcsa_mod.is_live():
+        return {"ok": False, "reason": "fmcsa_not_configured",
+                "hint": "Drop FMCSA_WEBKEY in backend/.env to enable live lookups."}
+    snap = await fmcsa_mod.lookup_by_dot(dot)
+    if not snap:
+        return {"ok": False, "reason": "not_found_or_error"}
+    await db.prospects.update_one({"id": pid}, {"$set": {
+        "fmcsa_snapshot": snap,
+        "is_verified": True,
+        "verification_source": "fmcsa_live",
+        "updated_at": _utcnow_iso(),
+    }})
+    return {"ok": True, "snapshot": snap}
+
+
+REAL_TAILOR_SYS = (
+    "You write COLD-OUTREACH personalization for a REAL Minnesota freight company. "
+    "You will be given verifiable facts (FMCSA snapshot OR public company facts). "
+    "STRICTLY ground every claim in those facts. Do NOT invent fleet sizes, headcounts, customer counts, "
+    "or pain points the data doesn't support. If you don't have a fact, say 'based on public registry' or omit. "
+    "Voice: operator-to-operator, no marketing fluff, no exclamations. "
+    "Output JSON: {\"pain_point\": str (1 specific sentence — must reference at least one fact), "
+    "\"hook\": str (a 1-sentence cold opener that name-drops the verifiable fact), "
+    "\"subject\": str (under 60 chars), "
+    "\"body\": str (90–140 words, operator-grade, ends with a 15-min ask)}."
+)
+
+
+@api.post("/leads/{pid}/tailor-hook")
+async def leads_tailor_hook(pid: str, _: str = Depends(require_admin)):
+    """LLM tailors pain_point + hook + subject + body using ONLY verifiable
+    facts about the company. If FMCSA snapshot exists, use it; otherwise use
+    the curated registry facts (website, location, size band)."""
+    p = await db.prospects.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Lead not found")
+    if p.get("is_synthetic"):
+        raise HTTPException(400, "Cannot tailor real outreach for synthetic prospects · re-seed via /leads/seed-real-mn")
+
+    facts: Dict[str, Any] = {
+        "company": p["company"], "industry": p.get("industry"),
+        "city": p.get("city"), "state": p.get("state"),
+        "website": p.get("website"), "company_size": p.get("company_size"),
+        "dot_number": p.get("dot_number"), "mc_number": p.get("mc_number"),
+        "ticker": p.get("ticker"), "notes": p.get("notes"),
+    }
+    if p.get("fmcsa_snapshot"):
+        facts["fmcsa_snapshot"] = p["fmcsa_snapshot"]
+
+    session = str(uuid.uuid4())
+    chat = _llm(session, REAL_TAILOR_SYS, "anthropic")
+    user_msg = "VERIFIABLE FACTS:\n" + json.dumps(facts, indent=2, default=str)
+    raw: List[str] = []
+    async for ev in chat.stream_message(UserMessage(text=user_msg)):
+        if isinstance(ev, TextDelta):
+            raw.append(ev.content)
+        elif isinstance(ev, StreamDone):
+            break
+    try:
+        data = json.loads(_strip_json("".join(raw)))
+    except Exception as e:
+        raise HTTPException(500, f"LLM JSON parse failed: {e}")
+    pain = (data.get("pain_point") or "").strip()
+    hook = (data.get("hook") or "").strip()
+    subject = (data.get("subject") or "").strip()
+    body_text = (data.get("body") or "").strip()
+    await db.prospects.update_one({"id": pid}, {"$set": {
+        "pain_point": pain, "hook": hook,
+        "tailored_subject": subject, "tailored_body": body_text,
+        "tailored_at": _utcnow_iso(),
+    }})
+    return {"pain_point": pain, "hook": hook, "subject": subject, "body": body_text, "facts_used": facts}
 
 
 @api.delete("/prospects/{pid}")
@@ -4924,7 +5188,9 @@ async def alerts_ack_all(admin: str = Depends(require_admin)):
     return {"acked": res.modified_count}
 
 
-# -------------------- Startup: seed admin --------------------
+    # Mark all pre-existing prospects (created before is_synthetic field existed) as synthetic.
+    # They were all AI-generated. New CSV / FMCSA seeded leads set is_synthetic=False explicitly.
+    # -------------------- Startup: seed admin --------------------
 @app.on_event("startup")
 async def seed_admin():
     existing = await db.admins.find_one({"email": ADMIN_EMAIL})
@@ -4963,6 +5229,13 @@ async def seed_admin():
             {"$setOnInsert": {**pb, "id": str(uuid.uuid4()), "created_at": _utcnow_iso()}},
             upsert=True,
         )
+    # Backfill: mark legacy prospects as synthetic so the UI can hide them.
+    backfill = await db.prospects.update_many(
+        {"is_synthetic": {"$exists": False}},
+        {"$set": {"is_synthetic": True, "is_verified": False, "verification_source": "ai_synthesized_legacy"}},
+    )
+    if backfill.modified_count:
+        log.info(f"prospects · backfilled {backfill.modified_count} legacy records as is_synthetic=True")
 
 
 @app.on_event("shutdown")

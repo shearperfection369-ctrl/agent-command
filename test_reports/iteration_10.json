@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 10 · REAL MN-freight leads + CSV import + tailor-hook · FULL PASS. 14/14 backend pytest specs green covering FMCSA scaffold-mode status, idempotent seed-real-mn (14 curated MN freight cos, second call updates 14/inserts 0), new /api/prospects response shape with summary {total, synthetic, verified, real} + source=real|synthetic + verified_only filters, CSV bulk import (1 valid → inserted+verified, 2 rejected with correct reasons 'invalid email format' & 'missing company or email', re-import is idempotent), enrich-fmcsa graceful degrade (returns {ok:false, reason:'fmcsa_not_configured'} — NOT 500), tailor-hook on real CH Robinson lead (output references verifiable facts: 'Robinson'/'Eden Prairie'/'MC-209528'/'15,000+'/'NASDAQ:CHRW'), tailor-hook on synthetic lead → 400 with 'synthetic' in detail, /prospects/generate stamps is_synthetic=true + verification_source='ai_synthesized', and legacy backfill (≥11 pre-existing AI rows correctly marked is_synthetic=true). UI flow green: login → admin-tab-leads → prospects-panel renders → synthetic-warning visible → 3 src filters (real/synth/all) + real-leads-actions + seed-real-mn-btn + import-csv-btn all present → src-real click filters table (17 VERIFIED, 4 SYNTH, 14 DOT badges) → SEED REAL MN with confirm() dialog accepted → 'Seeded' toast appeared + CH Robinson row visible → CSV import expand → fill csv-textarea → csv-submit-btn → row landed → TAILOR HOOK clicked on first real prospect (API returns successfully — toast 'Tailored from verifiable facts' fires per code, lifetime ~4s expired before we polled at +15s but the LLM response itself is verified by backend test_tailor_real_lead). All regression tabs render: risk, memory, claims, integrations, lighthouse, package, launch. Honesty contract enforced: synthetic leads cannot be used for outreach tailoring.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "LighthousePanel", "issues": ["Pre-existing React warning: 'Each child in a list should have a unique key prop' in LighthousePanel render — does not affect functionality, but should be patched. Unrelated to this iteration."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_real_leads.py",
+    "/app/test_reports/pytest/iter10_results.xml"
+  ],
+  "action_items": [
+    "(non-blocking) Patch LighthousePanel list-key warning when convenient — pre-existing, not introduced by iter 10."
+  ],
+  "critical_code_review_comments": [
+    "fmcsa_lookup.py · MN_FREIGHT_SEED contains 14 entries; 3 are not MN-HQ (Wilson VA, Holland MI, Roadrunner IL, J.B. Hunt AR) but explicitly noted as having MSP terminal presence — labeling is accurate ('MSP service center'/'MSP terminal'). Status hint correctly points at https://mobile.fmcsa.dot.gov/QCDevsite.",
+    "server.py /leads/seed-real-mn · update path only refreshes registry-anchored fields (company, industry, website, DOT#, MC#, size, verification_source). Operator-edited fields (name/title/email/pain_point/hook/contacted) are intentionally preserved on re-seed. Idempotency keyed on dot_number when present, else company name — sound.",
+    "server.py /leads/import-csv · validates BOTH format (RFC regex) AND domain resolves; is_verified = ver['ok'] (both). Rows with format-fail are rejected as 'invalid email format'; format-pass but domain-unresolved still INSERT but with is_verified=false (not rejected) — this is intentional and matches the spec; just call it out for next agent.",
+    "server.py /leads/{pid}/enrich-fmcsa · degrades gracefully (200 with ok:false) when FMCSA_WEBKEY missing — does NOT 500. Spec satisfied.",
+    "server.py /leads/{pid}/tailor-hook · HTTP 400 with 'synthetic' in detail when is_synthetic=true — refusal contract honored. LLM prompt REAL_TAILOR_SYS explicitly forbids inventing facts and requires referencing facts_used.",
+    "server.py /prospects · new shape is backwards-compat-friendly (the legacy clients keying off `prospects` key still work; new clients pick up `summary` and `count`). source filter values 'real' and 'synthetic' both implemented.",
+    "server.py startup backfill · runs once-on-boot; verified live count of synthetic ≥ 11. Idempotent (uses $exists:false guard).",
+    "Dashboard.jsx ProspectsPanel · all required data-testids present: prospects-panel, synthetic-warning (conditional on summary.synthetic>0), src-real/src-synthetic/src-all, real-leads-actions (unconditional), seed-real-mn-btn, import-csv-btn, csv-import-form, csv-textarea, csv-submit-btn, verified-only-toggle, prospect-tailor-{id}. SYNTH/✓ VERIFIED/DOT badges all visible (counted 4 / 17 / 14 on src-real view).",
+    "server.py is now ~5254 lines (was 4981 in iter9) — repeating recommendation: split into routers/leads.py + routers/risk_guard.py + routers/claims.py + routers/memory.py. Still non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10_real_leads.py (new — 14 specs, 100% pass)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@jadeos.ai / JadeOS!2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Re-ran /api/leads/seed-real-mn (idempotent, 14 curated MN freight rows refreshed). CSV import test created one TEST_-prefixed prospect: TEST_Acme Brokerage / ops@example.com (left in DB — easy to identify and bulk-purge by company prefix). 2 synthetic prospects generated via /prospects/generate for refusal test (industry=general, count=2) — also left in DB; flagged is_synthetic=true.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 10 fully validates the new honesty contract: every prospect has is_synthetic + is_verified flags. FMCSA scaffold mode returns curated 14-row MN freight seed without 500s when FMCSA_WEBKEY is empty. Real CH Robinson row (DOT 451058, MC-209528) is the canonical 'real lead' test target — tailor-hook on it produces facts-grounded copy. Synthetic prospects return HTTP 400 on tailor-hook with 'synthetic' in detail. CSV import endpoint accepts {rows:[{company, email, ...}], industry_default} — format-invalid emails are rejected outright; format-valid but domain-unresolved insert with is_verified=false. Idempotency on (company+email) for CSV, on dot_number-or-company for FMCSA seed. The UI 'Tailored' toast (sonner) has ~4s lifetime; if you wait >5s after click you'll miss it — verify the API call directly or poll the row immediately. Pre-existing LighthousePanel React 'unique key' console warning is unrelated to this iteration. No backend or frontend regressions detected.",
+  "rca of the issue": "N/A — no bugs found in this iteration."
+}
