@@ -2,9 +2,19 @@
   "prompt": "Cinematic 4K promotional reel for JADE OS \u2014 an AI operator console for Minneapolis freight, healthcare, manufacturing, SaaS, e-commerce, insurance, legal, and real-estate operators. Pitch-black studio set with a faint cyan grid floor receding to vanishing point. A holographic terminal interface materializes mid-air, glowing in electric lime-green and quantum-cyan wireframe \u2014 data streams flow across translucent panels: BOLs auto-extracted, lead scores ticking up, support tickets routing themselves. Industry sigils orbit a central JADE bracketed monogram (a sharp lime-green letter J inside corner brackets): a freight semi-truck, a stethoscope, a precision factory gear, a contract document, a dollar sign, a judge's gavel \u2014 each connecting into the core via thin violet light-trails that pulse on every transaction. Crisp UI cards animate in: 'OPERATOR \u00b7 MISSION CONTROL', 'LIGHTHOUSE PROGRAM', '6 AGENTS \u00b7 11 INDUSTRIES'. Anamorphic flares, depth-of-field, particle motes drift through the frame. The camera dollies forward through the holographic stack and resolves on a clean wordmark reveal \u2014 'JADE OS' in bold geometric sans-serif, lime-green on console black, with a subtle scanline. A small caption beneath reads 'MPLS \u00b7 AI AGENTS'. Mood: confident, precise, premium, investor-grade tech reel. High contrast, futuristic, no humans, no garbled text. Aspect 16:9, broadcast-quality colour, deliberate motion.",
   "model": "sora-2",
   "size": "1280x720",
-  "duration_s": 12,
+  "duration_s": 16.6,
   "started": "2026-06-05T01:10:41.732484+00:00",
   "finished": "2026-06-05T01:13:31.040081+00:00",
   "elapsed_s": 169.3,
-  "file_mb": 9.06
+  "file_mb": 9.06,
+  "polished_at": "2026-02-07T16:00:00Z",
+  "intro": "JadeOS AI Suite \u00b7 trinity products",
+  "resolution": "1920x1080",
+  "fps": 30,
+  "audio_lufs_norm": true,
+  "fade_in_s": 0.3,
+  "fade_out_s": 0.8,
+  "intro_s": 3.0,
+  "outro_s": 1.5,
+  "intro_branding": "JadeOS AI Suite \u00b7 trinity products"
 }

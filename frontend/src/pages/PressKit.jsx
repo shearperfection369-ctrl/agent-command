@@ -127,10 +127,15 @@ export default function PressKit() {
       {/* Demo reel */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10" data-testid="press-reel">
         <div className="mono-label text-[#00ffff] mb-3">05 · PROMOTIONAL REEL</div>
-        <h2 className="font-display font-black tracking-tight text-white mb-10"
+        <h2 className="font-display font-black tracking-tight text-white mb-3"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
-          12 seconds. The pitch.
+          The pitch reel.
         </h2>
+        <p className="font-mono-tech text-[12px] text-white/55 mb-10 max-w-2xl">
+          16 seconds · 1080p · JadeOS AI Suite intro → live ops montage → contact.
+          Voice-mastered, broadcast-safe levels, fade-in and fade-out so it plays
+          clean from start to finish.
+        </p>
         <div className="deck-card relative overflow-hidden max-w-4xl">
           <CornerBrackets />
           <video

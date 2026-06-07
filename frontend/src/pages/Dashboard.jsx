@@ -764,7 +764,7 @@ Built by an operator, for operators.
         <p className="text-white/65 text-sm leading-relaxed max-w-2xl">
           The promotional video hasn't been generated yet. Run{" "}
           <code className="font-mono-tech text-[#ccff00]">python backend/scripts/generate_promo_video.py</code>{" "}
-          from the repo root to produce <code className="font-mono-tech text-[#00ffff]">jadeos_promo.mp4</code> (Sora 2 · 12s · 1280×720). Takes ~3 minutes.
+          from the repo root to produce <code className="font-mono-tech text-[#00ffff]">jadeos_promo.mp4</code> (Sora 2 · 12s · 1280×720, then polished to 16s · 1920×1080 with JadeOS AI Suite intro + fades). Takes ~3 minutes.
         </p>
       </div>
     );
