@@ -199,7 +199,7 @@ export default function InvestorInvite() {
 
             {/* ===================== FOUNDER BIO ===================== */}
             <Section id="bio" eyebrow="01.5 · FOUNDER BIO" eyebrowColor={ACCENT.cyan}
-                     title={<>13 years inside the chair.<br /><span style={{ color: ACCENT.cyan }}>One operator. Two products.</span></>}>
+                     title={<>13 years inside the chair.<br /><span style={{ color: ACCENT.cyan }}>One operator. Three products.</span></>}>
                 <div className="grid lg:grid-cols-[260px_1fr] gap-6 items-start" data-testid="founder-bio-block">
                     {/* Portrait */}
                     <div className="relative border border-[#00ffff44] bg-[#0a0c18] overflow-hidden" data-testid="founder-portrait">
@@ -216,7 +216,7 @@ export default function InvestorInvite() {
                             </div>
                         </div>
                         <div className="px-4 py-3 border-t border-white/10 flex flex-wrap gap-3 bg-[#0a0c18]">
-                            <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer"
+                            <a href="https://www.linkedin.com/in/oliver-cummins-a27304a3/" target="_blank" rel="noreferrer"
                                data-testid="founder-linkedin"
                                className="mono-label text-[10px] text-[#00ffff] hover:underline">↗ LINKEDIN</a>
                             <a href="mailto:founder@jadeos.ai" data-testid="founder-email"
