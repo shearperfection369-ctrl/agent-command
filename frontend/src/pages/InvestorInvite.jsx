@@ -195,21 +195,21 @@ export default function InvestorInvite() {
             <Section id="bio" eyebrow="01.5 · FOUNDER BIO" eyebrowColor={ACCENT.cyan}
                      title={<>13 years inside the chair.<br /><span style={{ color: ACCENT.cyan }}>One operator. Two products.</span></>}>
                 <div className="grid lg:grid-cols-[260px_1fr] gap-6 items-start" data-testid="founder-bio-block">
-                    {/* Portrait placeholder */}
-                    <div className="relative border border-[#00ffff44] bg-[#0a0c18]" data-testid="founder-portrait">
+                    {/* Portrait */}
+                    <div className="relative border border-[#00ffff44] bg-[#0a0c18] overflow-hidden" data-testid="founder-portrait">
                         <CornerBrackets />
-                        <div className="aspect-[3/4] flex flex-col items-center justify-center text-center px-4 py-6"
-                             style={{ background: "radial-gradient(circle at 50% 35%, #0a3d50 0%, #06080f 75%)" }}>
-                            <svg viewBox="0 0 64 64" className="w-24 h-24 mb-3" aria-hidden="true">
-                                <circle cx="32" cy="22" r="11" fill="none" stroke="#00ffff" strokeWidth="1.4" />
-                                <path d="M10 60 Q 10 38 32 38 Q 54 38 54 60" fill="none" stroke="#00ffff" strokeWidth="1.4" strokeLinecap="round" />
-                            </svg>
-                            <div className="mono-label text-[10px] text-[#00ffff]">FOUNDER · CEO</div>
-                            <div className="font-display font-black text-white text-xl mt-2">Operator&apos;s Name</div>
-                            <div className="font-mono-tech text-[10.5px] text-white/55 mt-1">Minneapolis · MN</div>
-                            <div className="font-mono-tech text-[10px] text-white/35 mt-4 italic">(replace placeholder with founder portrait + name when ready)</div>
+                        <div className="relative aspect-[3/4] overflow-hidden">
+                            <img src="/assets/founder.png" alt="Founder · 13-year transportation operator"
+                                 className="w-full h-full object-cover object-center" />
+                            <div className="absolute inset-0 pointer-events-none"
+                                 style={{ background: "linear-gradient(180deg, transparent 55%, rgba(6,8,15,0.92) 100%)" }} />
+                            <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <div className="mono-label text-[10px] text-[#00ffff]">FOUNDER · CEO</div>
+                                <div className="font-display font-black text-white text-xl mt-1 leading-tight">Founder Name</div>
+                                <div className="font-mono-tech text-[10.5px] text-[#ccff00] mt-1">13-year transportation operator · Minneapolis · MN</div>
+                            </div>
                         </div>
-                        <div className="px-4 py-3 border-t border-white/10 flex flex-wrap gap-2">
+                        <div className="px-4 py-3 border-t border-white/10 flex flex-wrap gap-3 bg-[#0a0c18]">
                             <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer"
                                data-testid="founder-linkedin"
                                className="mono-label text-[10px] text-[#00ffff] hover:underline">↗ LINKEDIN</a>
@@ -248,7 +248,7 @@ export default function InvestorInvite() {
                                 { yrs: "YR 1-3", role: "Dispatcher", note: "Hot-shot fleet · 14 trucks · ran the desk solo nights & weekends", c: ACCENT.jade },
                                 { yrs: "YR 4-7", role: "Pricing + RFP Lead", note: "Lane-rate analysis · rate-floor discipline · contract vs spot mix", c: ACCENT.cyan },
                                 { yrs: "YR 8-10", role: "Compliance & Safety", note: "FMCSA §395/396 in production · CSA-score work · audit-pack hand-runs", c: ACCENT.violet },
-                                { yrs: "YR 11-13", role: "Operations + Builder", note: "Spec&apos;d the TMS the segment needed · then built it with JADE OS on top", c: ACCENT.amber },
+                                { yrs: "YR 11-13", role: "Operations + Builder", note: "Spec'd the TMS the segment needed · then built it with JADE OS on top", c: ACCENT.amber },
                             ].map((ch, i) => (
                                 <div key={i} className="border p-3" style={{ borderColor: `${ch.c}44`, background: `${ch.c}08` }}>
                                     <div className="mono-label text-[9.5px]" style={{ color: ch.c }}>{ch.yrs}</div>
