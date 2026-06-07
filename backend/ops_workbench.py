@@ -1039,6 +1039,147 @@ def generate_pitch_deck_pdf(output_path: str) -> str:
     return output_path
 
 
+def generate_deep_plan_pdf(output_path: str, phases_from_db: Optional[List[Dict[str, Any]]] = None) -> str:
+    """Render the full 8-phase deep plan to a PDF brief.
+
+    If `phases_from_db` is provided, render the live status (status/notes) from the DB.
+    Otherwise fall back to PHASES_DEEP (initial state, all todo).
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, PageBreak,
+                                     Table, TableStyle)
+
+    doc = SimpleDocTemplate(output_path, pagesize=letter,
+                            leftMargin=0.6 * inch, rightMargin=0.6 * inch,
+                            topMargin=0.6 * inch, bottomMargin=0.6 * inch)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("T", parent=styles["Heading1"], fontSize=26,
+                                  textColor=colors.HexColor("#0a0c18"), spaceAfter=10, leading=30)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=16,
+                         textColor=colors.HexColor("#0a0c18"), spaceBefore=14,
+                         spaceAfter=8, leading=20)
+    h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontSize=12,
+                         textColor=colors.HexColor("#0a0c18"), spaceBefore=8,
+                         spaceAfter=4, leading=16)
+    body = ParagraphStyle("B", parent=styles["BodyText"], fontSize=10, leading=14,
+                           textColor=colors.HexColor("#1a1a1a"), spaceAfter=4)
+    meta = ParagraphStyle("M", parent=styles["BodyText"], fontSize=8.5, leading=11,
+                           textColor=colors.HexColor("#666"), spaceAfter=10)
+    deliv = ParagraphStyle("D", parent=styles["BodyText"], fontSize=9.5, leading=13,
+                            textColor=colors.HexColor("#0a4d2d"), spaceAfter=2,
+                            leftIndent=14)
+    exit_p = ParagraphStyle("E", parent=styles["BodyText"], fontSize=9.5, leading=13,
+                             textColor=colors.HexColor("#0f3d6b"), spaceAfter=2,
+                             leftIndent=14)
+    todo = ParagraphStyle("ST", parent=styles["BodyText"], fontSize=9, leading=12,
+                           textColor=colors.HexColor("#666"))
+    done = ParagraphStyle("SD", parent=styles["BodyText"], fontSize=9, leading=12,
+                           textColor=colors.HexColor("#0a7a25"))
+    inprog = ParagraphStyle("SI", parent=styles["BodyText"], fontSize=9, leading=12,
+                             textColor=colors.HexColor("#0066b3"))
+    blocked = ParagraphStyle("SB", parent=styles["BodyText"], fontSize=9, leading=12,
+                              textColor=colors.HexColor("#aa1d4a"))
+    STATUS_STYLE = {"todo": todo, "done": done, "in_progress": inprog, "blocked": blocked}
+    STATUS_SYM = {"todo": "○", "done": "✓", "in_progress": "▸", "blocked": "✗"}
+
+    phase_source = phases_from_db if phases_from_db else PHASES_DEEP
+
+    total_steps = sum(len(p.get("steps") or p.get("substeps") or []) for p in phase_source)
+    total_hours = sum(s.get("hours", 0) for p in phase_source
+                      for s in (p.get("steps") or p.get("substeps") or [])
+                      if isinstance(s, dict))
+    done_steps = sum(1 for p in phase_source
+                     for s in (p.get("steps") or p.get("substeps") or [])
+                     if isinstance(s, dict) and s.get("status") == "done")
+    pct = round((done_steps / total_steps) * 100, 1) if total_steps else 0
+
+    flow = []
+    flow.append(Paragraph("JADE OS · Sales Engineering Execution Plan", title_style))
+    flow.append(Paragraph(
+        f"8 Phases · {total_steps} substeps · ~{total_hours}h budget (~{round(total_hours / 8, 1)} working days) · "
+        f"progress {pct}% ({done_steps}/{total_steps}) · generated "
+        f"{datetime.now(timezone.utc).strftime('%B %d, %Y %H:%M UTC')}",
+        meta))
+
+    # Phase summary table
+    sum_rows = [["#", "Phase", "Duration", "Owner", "Steps", "Hours", "Linked Lab"]]
+    for p in phase_source:
+        steps_list = p.get("steps") or p.get("substeps") or []
+        ph_hours = sum(s.get("hours", 0) for s in steps_list if isinstance(s, dict))
+        sum_rows.append([
+            str(p.get("n", "")),
+            p.get("title", ""),
+            p.get("duration", ""),
+            p.get("owner", "") or "—",
+            f"{sum(1 for s in steps_list if isinstance(s, dict) and s.get('status') == 'done')}/{len(steps_list)}",
+            f"{ph_hours}h",
+            p.get("op_link", "") or "—",
+        ])
+    tbl = Table(sum_rows, colWidths=[24, 200, 60, 78, 50, 40, 60])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0a0c18")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#ccff00")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cccccc")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f7fa")]),
+    ]))
+    flow.append(Spacer(1, 0.1 * inch))
+    flow.append(tbl)
+    flow.append(PageBreak())
+
+    # Per-phase deep detail
+    for p in phase_source:
+        steps_list = p.get("steps") or p.get("substeps") or []
+        ph_hours = sum(s.get("hours", 0) for s in steps_list if isinstance(s, dict))
+        ph_done = sum(1 for s in steps_list if isinstance(s, dict) and s.get("status") == "done")
+        flow.append(Paragraph(f"Phase {p.get('n')} · {p.get('title', '')}", h2))
+        flow.append(Paragraph(
+            f"Duration {p.get('duration', '—')} · Owner {p.get('owner') or '—'} · "
+            f"{ph_done}/{len(steps_list)} done · {ph_hours}h budget"
+            + (f" · Linked Lab {p.get('op_link')}" if p.get("op_link") else ""),
+            meta))
+        if p.get("outcome"):
+            flow.append(Paragraph(f"<b>Outcome:</b> {p['outcome']}", body))
+        for i, s in enumerate(steps_list):
+            if not isinstance(s, dict):
+                continue
+            st = s.get("status") or "todo"
+            sid = s.get("id") or f"{p.get('n')}.{i + 1}"
+            flow.append(Paragraph(
+                f"{STATUS_SYM[st]} <b>{sid}</b> · {s.get('text', '')}", STATUS_STYLE[st]))
+            if s.get("deliverable"):
+                flow.append(Paragraph(f"DELIVERABLE · {s['deliverable']}", deliv))
+            if s.get("exit_criteria"):
+                flow.append(Paragraph(f"EXIT · {s['exit_criteria']}", exit_p))
+            tags = []
+            if s.get("hours") is not None:
+                tags.append(f"{s['hours']}h")
+            if s.get("owner"):
+                tags.append(s["owner"])
+            if s.get("op_link"):
+                tags.append(f"→ {s['op_link']}")
+            if s.get("tools"):
+                tags.append("tools: " + " · ".join(s["tools"]))
+            if s.get("depends_on"):
+                tags.append("depends: " + " · ".join(s["depends_on"]))
+            if tags:
+                flow.append(Paragraph(" · ".join(tags), meta))
+            if s.get("notes"):
+                flow.append(Paragraph(f"<i>note: {s['notes']}</i>", meta))
+        flow.append(Spacer(1, 0.1 * inch))
+        flow.append(PageBreak())
+
+    flow.append(Paragraph("— end of plan —", meta))
+    doc.build(flow)
+    return output_path
+
+
 
 # ---------- ROI model for OP-02 ----------
 

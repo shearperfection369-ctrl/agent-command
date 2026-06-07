@@ -5356,6 +5356,30 @@ async def workbench_reseed_phases(admin: str = Depends(require_admin)):
     return res
 
 
+@api.get("/workbench/plan/download")
+async def workbench_plan_download(_: str = Depends(require_admin)):
+    """Render the full 8-phase deep execution plan to PDF (with live status)."""
+    phases = await db.workbench_phases.find({}, {"_id": 0}).sort("n", 1).to_list(20)
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = f"{out_dir}/jadeos_execution_plan_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"
+    ow_mod.generate_deep_plan_pdf(out_path, phases_from_db=phases)
+    return FileResponse(out_path, media_type="application/pdf",
+                        filename="jadeos_execution_plan.pdf")
+
+
+@api.get("/agent/workbench/plan.pdf")
+async def agent_workbench_plan_pdf():
+    """Public download · full 8-phase execution plan PDF (with live status if seeded)."""
+    phases = await db.workbench_phases.find({}, {"_id": 0}).sort("n", 1).to_list(20)
+    out_dir = "/app/backend/static_workbench"
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = f"{out_dir}/public_execution_plan.pdf"
+    ow_mod.generate_deep_plan_pdf(out_path, phases_from_db=phases)
+    return FileResponse(out_path, media_type="application/pdf",
+                        filename="jadeos_execution_plan.pdf")
+
+
 @api.patch("/workbench/decisions/{did}")
 async def workbench_decision_flip(did: str, body: ow_mod.DecisionFlip, admin: str = Depends(require_admin)):
     d = await db.workbench_decisions.find_one({"id": did}, {"_id": 0})

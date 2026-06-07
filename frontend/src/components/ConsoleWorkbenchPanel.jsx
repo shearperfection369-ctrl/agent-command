@@ -269,8 +269,14 @@ function StrategyPanel() {
         <div className="space-y-4" data-testid="console-strategy">
             <div className="deck-card p-5 relative">
                 <CornerBrackets />
-                <div className="mono-label text-[#00ffff]">STRATEGY · 5 DECISIONS · 7 RISKS · 8 PHASES</div>
-                <p className="font-mono-tech text-[11px] text-white/65 mt-1">The same decisions, risks, and phases the operator tracks in the admin Workbench — visible here as proof of the operating layer.</p>
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <div>
+                        <div className="mono-label text-[#00ffff]">STRATEGY · 5 DECISIONS · 7 RISKS · 8 PHASES</div>
+                        <p className="font-mono-tech text-[11px] text-white/65 mt-1">The same decisions, risks, and phases the operator tracks in the admin Workbench — visible here as proof of the operating layer.</p>
+                    </div>
+                    <a data-testid="console-plan-download" href={`${API_BASE}/agent/workbench/plan.pdf`} target="_blank" rel="noreferrer"
+                        className="btn-jade text-xs" style={{ background: "#7c5cff", color: "#fff" }}>↓ DOWNLOAD EXECUTION PLAN · PDF</a>
+                </div>
             </div>
             <div className="grid lg:grid-cols-2 gap-3">
                 <div className="deck-card relative" data-testid="console-decisions">

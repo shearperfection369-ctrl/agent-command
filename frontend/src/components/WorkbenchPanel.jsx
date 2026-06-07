@@ -29,27 +29,44 @@ function Stat({ k, v, c, sub }) {
     );
 }
 
-function OperationsGrid({ ops, onOpen }) {
+function OperationsGrid({ ops, onOpen, phaseByOp }) {
     return (
         <div className="grid lg:grid-cols-2 gap-4" data-testid="ops-grid">
-            {ops.map((o) => (
-                <div key={o.id} className="deck-card relative p-5" style={{ borderColor: `${o.color}55` }} data-testid={`op-card-${o.id}`}>
-                    <CornerBrackets />
-                    <div className="flex items-baseline justify-between gap-3">
-                        <span className="mono-label text-[11px]" style={{ color: o.color }}>{o.id} · {o.code}</span>
-                        <span className="mono-label text-[10px]" style={{ color: o.depth === "full" ? "#ccff00" : "#ffce4f" }}>
-                            {o.depth === "full" ? "● FULL LAB" : "○ SCAFFOLD"}
-                        </span>
+            {ops.map((o) => {
+                const ph = phaseByOp[o.id];
+                const ph_done = ph ? (ph.steps || []).filter((s) => s.status === "done").length : 0;
+                const ph_total = ph ? (ph.steps || []).length : 0;
+                const ph_pct = ph_total ? Math.round((ph_done / ph_total) * 100) : 0;
+                return (
+                    <div key={o.id} id={`lab-${o.id}`} className="deck-card relative p-5" style={{ borderColor: `${o.color}55` }} data-testid={`op-card-${o.id}`}>
+                        <CornerBrackets />
+                        <div className="flex items-baseline justify-between gap-3">
+                            <span className="mono-label text-[11px]" style={{ color: o.color }}>{o.id} · {o.code}</span>
+                            <span className="mono-label text-[10px]" style={{ color: o.depth === "full" ? "#ccff00" : "#ffce4f" }}>
+                                {o.depth === "full" ? "● FULL LAB" : "○ SCAFFOLD"}
+                            </span>
+                        </div>
+                        <h3 className="font-display font-black text-white text-lg mt-2 leading-snug">{o.title}</h3>
+                        <p className="font-mono-tech text-[11px] text-white/65 mt-2 leading-relaxed">{o.deliverable}</p>
+                        {ph && (
+                            <div className="mt-3 pt-3 border-t border-white/5" data-testid={`op-card-${o.id}-phase`}>
+                                <div className="flex items-baseline justify-between text-[10px] font-mono-tech mb-1">
+                                    <span className="text-white/55">PHASE {ph.n} · {ph_done}/{ph_total} · {ph.duration}</span>
+                                    <span style={{ color: ph_pct >= 100 ? "#ccff00" : ph_pct > 0 ? "#00ffff" : "rgba(255,255,255,0.45)" }}>{ph_pct}%</span>
+                                </div>
+                                <div className="h-1 bg-white/5 overflow-hidden">
+                                    <div className="h-full transition-all" style={{ width: `${ph_pct}%`, background: ph_pct >= 100 ? "#ccff00" : ph_pct > 0 ? "#00ffff" : "rgba(255,255,255,0.2)" }} />
+                                </div>
+                            </div>
+                        )}
+                        <button data-testid={`op-open-${o.id}`} onClick={() => onOpen(o)}
+                            className="btn-jade text-xs mt-4 w-full inline-flex items-center justify-center gap-2"
+                            style={{ background: o.color, color: "#0a0c18" }}>
+                            → OPEN LAB
+                        </button>
                     </div>
-                    <h3 className="font-display font-black text-white text-lg mt-2 leading-snug">{o.title}</h3>
-                    <p className="font-mono-tech text-[11px] text-white/65 mt-2 leading-relaxed">{o.deliverable}</p>
-                    <button data-testid={`op-open-${o.id}`} onClick={() => onOpen(o)}
-                        className="btn-jade text-xs mt-4 w-full inline-flex items-center justify-center gap-2"
-                        style={{ background: o.color, color: "#0a0c18" }}>
-                        → OPEN LAB
-                    </button>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }
@@ -868,6 +885,25 @@ export default function WorkbenchPanel() {
         { id: "materials", label: "MATERIALS + TOOLS", c: "#00ffff" },
     ];
 
+    // Build OP → Phase lookup so the LABS grid can show "PHASE X · n/m" per OP card
+    const phaseByOp = {};
+    (data.phases || []).forEach((p) => { if (p.op_link) phaseByOp[p.op_link] = p; });
+
+    const downloadPlan = async () => {
+        try {
+            const tok = localStorage.getItem("jade_token");
+            const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/workbench/plan/download`,
+                { headers: { Authorization: `Bearer ${tok}` } });
+            if (!r.ok) throw new Error();
+            const blob = await r.blob();
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `jadeos_execution_plan_${new Date().toISOString().slice(0, 10)}.pdf`;
+            a.click();
+            toast.success("Plan PDF downloaded");
+        } catch { toast.error("Plan download failed."); }
+    };
+
     return (
         <div className="space-y-6" data-testid="workbench-panel">
             <div className="deck-card p-6 relative">
@@ -886,6 +922,18 @@ export default function WorkbenchPanel() {
                     <Stat k="RISKS · OPEN" v={data.summary.risks_open} c="#ffce4f" />
                     <Stat k="DATA POLICY" v="VERIFIED" c="#00ffff" sub="source attribution required" />
                 </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                    <button data-testid="workbench-plan-pdf-btn" onClick={downloadPlan}
+                        className="btn-jade text-xs inline-flex items-center gap-2"
+                        style={{ background: "#7c5cff", color: "#fff" }}>
+                        ↓ DOWNLOAD FULL PLAN · PDF ({data.summary.steps_total || 0} steps · {(data.summary.deep_plan || {}).estimated_hours || 0}h)
+                    </button>
+                    {typeof data.summary.steps_pct_complete === "number" && (
+                        <span className="px-3 py-2 mono-label text-[11px] border border-white/10 text-white/55">
+                            PROGRESS · {data.summary.steps_done || 0}/{data.summary.steps_total || 0} · {data.summary.steps_pct_complete}%
+                        </span>
+                    )}
+                </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -901,7 +949,7 @@ export default function WorkbenchPanel() {
                 })}
             </div>
 
-            {view === "ops" && <OperationsGrid ops={data.operations} onOpen={setOpenOp} />}
+            {view === "ops" && <OperationsGrid ops={data.operations} onOpen={setOpenOp} phaseByOp={phaseByOp} />}
             {view === "phases" && <PhasesView phases={data.phases} onStepUpdate={updateStep} />}
             {view === "decisions" && <DecisionsTracker decisions={data.decisions} onFlip={flipDecision} />}
             {view === "risks" && <RisksRegister risks={data.risks} onUpdate={updateRisk} />}
