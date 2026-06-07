@@ -10,6 +10,7 @@ import LaunchKit from "@/pages/LaunchKit";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import PitchDeck from "@/pages/PitchDeck";
+import InvestorInvite from "@/pages/InvestorInvite";
 import DemoReel from "@/pages/DemoReel";
 import { CaseStudiesIndex, CaseStudyDetail } from "@/pages/CaseStudies";
 import Billing from "@/pages/Billing";
@@ -66,7 +67,10 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/demo" element={<AgentDemo />} />
             <Route path="/reel" element={<DemoReel />} />
-            <Route path="/deck" element={<PitchDeck />} />
+            <Route path="/deck" element={<InvestorInvite />} />
+            <Route path="/invite" element={<InvestorInvite />} />
+            <Route path="/investor" element={<InvestorInvite />} />
+            <Route path="/deck-legacy" element={<PitchDeck />} />
             <Route path="/plan" element={<BusinessPlan />} />
             <Route path="/launch" element={<LaunchKit />} />
             <Route path="/cases" element={<CaseStudiesIndex />} />
