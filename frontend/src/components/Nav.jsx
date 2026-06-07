@@ -26,7 +26,7 @@ export default function Nav() {
             <span className="absolute -bottom-1 -right-1 h-2 w-2 bg-[#00ffff]" />
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold tracking-tight text-white text-lg">JADE OS</span>
+            <span className="font-display font-bold tracking-tight text-white text-lg">JadeOS</span>
             <span className="mono-label text-[#ccff00]">MPLS · AI AGENTS</span>
           </div>
         </Link>

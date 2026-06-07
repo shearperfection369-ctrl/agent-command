@@ -1,7 +1,7 @@
 /**
  * HotShotTmsPanel — Embedded preview of the Hot Shot TMS UI inside /demo.
  * Lets VCs click through 4 representative TMS screens during a discovery call
- * without leaving the JADE OS console.
+ * without leaving the JadeOS-Agent Suite console.
  *
  * All data here is illustrative SAMPLE data — clearly labeled as a preview of
  * the production-ready Hot Shot TMS build.
@@ -234,9 +234,9 @@ function FleetDrivers() {
                 </div>
             </div>
             <div className="border border-[#7c5cff44] bg-[#7c5cff08] p-4">
-                <div className="mono-label text-[10px] text-[#7c5cff] mb-2">JADE OS M5 INTEGRATION</div>
+                <div className="mono-label text-[10px] text-[#7c5cff] mb-2">JadeOS-Agent Suite M5 INTEGRATION</div>
                 <div className="font-mono-tech text-[11px] text-white/75 leading-relaxed">
-                    Every driver row carries a live JADE OS retention band sourced from <span className="text-[#ccff00]">/api/agent/retention/risk</span>.
+                    Every driver row carries a live JadeOS-Agent Suite retention band sourced from <span className="text-[#ccff00]">/api/agent/retention/risk</span>.
                     Click a driver in the production build to see the weighted factors (home-time deficit, pay stagnation, tenure cliff)
                     and recommended actions.
                 </div>
@@ -302,7 +302,7 @@ function BillingBol() {
                 </div>
             </div>
             <div className="border border-[#ff3b8a44] bg-[#ff3b8a08] p-4">
-                <div className="mono-label text-[10px] text-[#ff3b8a] mb-2">JADE OS RISK GUARD INTEGRATION</div>
+                <div className="mono-label text-[10px] text-[#ff3b8a] mb-2">JadeOS-Agent Suite RISK GUARD INTEGRATION</div>
                 <div className="font-mono-tech text-[11px] text-white/75 leading-relaxed">
                     Every quote that becomes an invoice is first validated against <span className="text-[#ccff00]">/api/quotes/validate</span> — the rate-floor guard
                     HARD-BLOCKS below-floor sells. The SHA-256 audit chain captures the decision regardless of outcome.
@@ -323,7 +323,7 @@ export default function HotShotTmsPanel() {
                         <div className="mono-label text-[11px] text-[#ccff00]">HOT SHOT TMS · PREVIEW</div>
                         <h2 className="font-display font-black text-white text-2xl mt-1">Operator-built TMS · deployment-ready</h2>
                         <p className="font-mono-tech text-[11.5px] text-white/65 mt-1.5 leading-relaxed max-w-2xl">
-                            The system of record paired with JADE OS. Click through the dispatch board, live map, fleet roster, and BOL/invoicing
+                            The system of record paired with JadeOS-Agent Suite. Click through the dispatch board, live map, fleet roster, and BOL/invoicing
                             views to see the surface VCs would be funding. Sample data shown.
                         </p>
                     </div>

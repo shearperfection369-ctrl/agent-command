@@ -1,13 +1,26 @@
-# JADE OS — PRD
+# JadeOS — PRD
 
 ## Original problem statement
 Build an AI agent platform to sell to companies in the Minneapolis area, with a full business plan and launch package to court existing businesses. Six agent types (customer service / Tier-1 support, sales qualification & lead scoring, data extraction & processing, ops / workflow automation, content / email generation, on-call ops co-pilot) wrapping Claude / GPT.
 
 After 1st pivot: app must be **universal** — not freight-only. Agents must serve any industry (freight, logistics, manufacturing, healthcare, SaaS, e-commerce, insurance, legal, real estate, professional services, general) and tailor lexicon + schema + tone per industry.
 
+After 2nd pivot (2026-02): **Trinity positioning for VCs** — pitch three products in tandem:
+1. **JadeOS Quantum AI** (flagship · 50+ modules · voice-first "Hey Jade" · 128-qubit Qiskit Aer + Claude Haiku 4.5)
+2. **JadeOS-Agent Suite** (six freight-vertical agents · sits on top of any TMS)
+3. **Hot Shot TMS** (operator-built system of record for the underserved hot-shot segment)
+
+Umbrella brand: **JadeOS** (mixed-case). Voice command "Hey Jade" preserved. Founder email `founder@jadeos.ai` preserved.
+
 ## Architecture
 - **Frontend**: React (CRA + craco), Tailwind, shadcn/ui, JADE OS brand (Space Grotesk + Inter + JetBrains Mono, Jade Lime / Quantum Cyan / Vault Violet on Console Black).
 - **Backend**: FastAPI + Motor (MongoDB). All routes prefixed `/api`. JWT admin auth (bcrypt + PyJWT).
+
+## Latest changes (2026-02-07)
+- **Trinity rename** — flagship `Jade` → `JadeOS Quantum AI`; agent suite `JADE OS` → `JadeOS-Agent Suite`; umbrella brand → `JadeOS` (mixed-case). Applied across `InvestorInvite.jsx`, `Dashboard.jsx`, `HotShotTmsPanel.jsx`, `ops_workbench.py` (PITCH_DECK + TECHNICAL_DOC + plan PDF), `Nav.jsx`, `Footer.jsx`. Preserved: `Hey Jade` voice command, `Jade Pro` / `Jade Broker tier` / `Jade Schools` / `Jade Maker` sub-tiers, `founder@jadeos.ai` email. PDF cover, page 4 (solution slide) verified to render the three product names correctly.
+- **Backend syntax fix** — removed orphan duplicate `"slides"/fact_sheets/readiness/competitive_brief` block (old 2-product copy) that was left after the previous session's `search_replace` edit in `ops_workbench.py`. Backend was failing to start with `IndentationError` at line 948 before this fix.
+- **Verification** — `/api/agent/workbench/architecture` 200 · `/api/agent/workbench/deck.pdf` 200 (16.9KB · 12 pages, cover + slide 4 verified via pypdf text extract) · `pytest tests/test_iteration12_workbench.py` 10/10 passing · ESLint clean on `InvestorInvite.jsx` · screenshot of `/invite` confirms hero, three-product card grid, and nav all show the renamed brands.
+
 - **LLM**: Claude Sonnet 4.5 + GPT-5.2 via `emergentintegrations.LlmChat` with Emergent Universal Key. Streaming SSE on chat.
 - **Industry-aware system prompts**: `_system_for(industry, role_hint)` builds prompts using an `INDUSTRY_LEXICON` dict.
 

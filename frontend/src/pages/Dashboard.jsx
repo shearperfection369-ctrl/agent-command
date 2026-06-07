@@ -275,7 +275,7 @@ function WebhooksPanel({ hooks, reload }) {
   const test = async (id) => {
     try {
       const { data } = await api.post(`/webhooks/${id}/dispatch`, {
-        title: "JADE OS test ping",
+        title: "JadeOS-Agent Suite test ping",
         body: "If you can read this, your webhook is live. — JADE",
       });
       data.delivered ? toast.success("Test delivered.") : toast.error(`Failed: ${data.error}`);
@@ -738,7 +738,7 @@ function PromoReelPanel() {
 
   const captionDraft = `Stop drowning in ops work.
 
-JADE OS is the AI-agent platform for Minneapolis operators — 6 industry-trained agents that triage support, qualify leads, extract docs, and run multi-step playbooks while you sleep.
+JadeOS-Agent Suite is the AI-agent platform for Minneapolis operators — 6 industry-trained agents that triage support, qualify leads, extract docs, and run multi-step playbooks while you sleep.
 
 · Freight · Healthcare · SaaS · Manufacturing · Legal · E-commerce · Real-Estate · Insurance ·
 
@@ -778,7 +778,7 @@ Built by an operator, for operators.
           <CornerBrackets />
           <div className="p-5 border-b border-white/10 flex items-center justify-between flex-wrap gap-3">
             <div className="mono-label text-[#ff3b8a]">
-              PROMOTIONAL REEL · JADE OS · {meta.duration_s}s · {meta.size}
+              PROMOTIONAL REEL · JadeOS-Agent Suite · {meta.duration_s}s · {meta.size}
               {meta.model && <span className="text-white/40"> · {meta.model}</span>}
             </div>
             <div className="flex items-center gap-3">

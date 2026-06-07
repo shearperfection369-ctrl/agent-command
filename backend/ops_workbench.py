@@ -1,4 +1,4 @@
-"""JADE OS · Operations Workbench.
+"""JadeOS · Operations Workbench.
 
 A structured Sales Engineering Operations workspace with:
   • 6 OPERATIONS (Labs) — each a discrete deliverable with personal-test pathway
@@ -584,7 +584,7 @@ def generate_market_analysis_pdf(content_sections: List[Dict[str, str]], output_
     flow = []
     flow.append(Paragraph("Minnesota Freight Industry · Deep-Dive Analysis", title_style))
     flow.append(Paragraph(
-        f"Prepared by JADE OS · Operations Workbench · {datetime.now(timezone.utc).strftime('%B %d, %Y')}",
+        f"Prepared by JadeOS · Operations Workbench · {datetime.now(timezone.utc).strftime('%B %d, %Y')}",
         meta_style,
     ))
     for sec in content_sections:
@@ -672,7 +672,7 @@ MARKET_ANALYSIS_FALLBACK_SECTIONS = [
         "• ELD penetration · ~100% for >24-hour interstate (FMCSA mandate since 2017)\n"
         "• TMS penetration · ~70% for 25-99 truck range, ~95% for 100+\n"
         "• Telematics (Geotab/Samsara/Omnitracs) · ~80% for 50+ trucks\n"
-        "• AI agent layer · single-digit penetration; the gap JADE OS targets\n"
+        "• AI agent layer · single-digit penetration; the gap JadeOS-Agent Suite targets\n"
         "• Top TMS vendors operating in MN · Descartes, McLeod, TMW, Selerant, MercuryGate")},
     {"title": "5 · Buyer Personas · 4 Archetypes", "body": (
         "Persona A · Small Regional · 25-75 trucks. Owner-operator-adjacent, dispatch-tribal, fuel-sensitive, "
@@ -787,165 +787,162 @@ AI_ARCHITECTURE = {
 
 PITCH_DECK = {
     "company": {
-        "name": "JADE OS · Hot Shot TMS",
-        "founder_note": "Built by a 13-year transportation operator",
+        "name": "JadeOS Quantum AI · JadeOS-Agent Suite · Hot Shot TMS",
+        "founder": "Oliver Cummins",
+        "founder_note": "Sole founder · 13-year transportation operator + builder of all three products",
         "headquarters": "Minneapolis, MN",
-        "stage": "Pre-seed · raising for AI agents + TMS launch in tandem · 2026",
+        "stage": "Raising for all three products in tandem · 2026",
     },
     "slides": [
         {"n": 1, "kind": "cover",
-         "title": "JADE OS + Hot Shot TMS",
-         "subtitle": "Six AI agents + an operator-built TMS for an underserved market. Both ready to deploy.",
-         "footer": "Minneapolis · MN · 2026",
-         "speaker_notes": "Open with the dual offering — fund both in tandem; the TMS targets a segment incumbents don't serve."},
+         "title": "JadeOS Quantum AI · JadeOS-Agent Suite · Hot Shot TMS",
+         "subtitle": "One sole-founder stack. Three investable products. Built and ready to deploy.",
+         "footer": "Oliver Cummins · Minneapolis · MN · 2026"},
 
         {"n": 2, "kind": "founder",
-         "title": "Built by a 13-year operator",
-         "subtitle": "Not built by software founders who read a book about logistics.",
+         "title": "One founder. Three products.",
+         "subtitle": "Built solo. By design. By a 13-year transportation operator.",
          "bullets": [
-            "13 years inside transportation operations · dispatch · pricing · compliance · driver management",
-            "Hot Shot TMS is the system the operator built because no incumbent TMS serves this segment",
-            "JADE OS is the AI layer that automates the decisions the operator made 60 times a day",
-            "We don't ship to logistics — we ship FROM logistics",
+            "Oliver Cummins · sole founder · architected and shipped all three products from $0",
+            "JadeOS Quantum AI flagship · the AI command center for builders, founders, lifelong learners",
+            "JadeOS-Agent Suite · the freight-vertical agent productization of JadeOS Quantum AI for logistics",
+            "Hot Shot TMS · the system of record built for the underserved hot-shot segment",
          ]},
 
         {"n": 3, "kind": "problem",
-         "title": "The operator's bleed · and the TMS gap",
+         "title": "Two pains. One operator who lived both.",
          "bullets": [
-            "Empty miles still 15-22% of fleet hours · ATRI 2024",
-            "60+ dispatch decisions per shift, mostly tribal knowledge",
-            "Compliance violations cost $1k-$5k each · FMCSA enforcement",
-            "Driver replacement cost ~$9.5k · turnover ~78% mid-market",
-            "Incumbent TMS vendors over-serve enterprise · under-serve the hot-shot / small-to-mid carrier segment we target",
+            "Consumer/prosumer pain · 8-14 fragmented SaaS subs at $187/mo average · no shared memory",
+            "Freight pain · empty miles 15-22% · dispatch decisions tribal · turnover ~78% mid-market",
+            "Cross-cutting pain · existing TMS vendors over-serve enterprise · under-serve hot-shot carriers",
+            "All three problems compound · one founder lived them · now ships the antidote",
          ]},
 
         {"n": 4, "kind": "solution",
-         "title": "Two products. One investable thesis.",
+         "title": "Three products. One investable thesis.",
          "bullets": [
-            "HOT SHOT TMS · system of record for an underserved freight segment · fully developed · deployment-ready",
-            "JADE OS · six AI agents that work on top of Hot Shot TMS or any existing TMS (Descartes / McLeod / TMW)",
-            "Why both at once · VCs want AI on top of existing TMS · our segment HAS no TMS to put it on top of",
-            "Strategy · launch the TMS into the underserved market · sell agents into existing TMS users in parallel",
+            "JadeOS Quantum AI · flagship · 50+ modules · voice-first \"Hey Jade\" · persistent memory · 128-qubit Qiskit Aer + Claude Haiku 4.5",
+            "JadeOS-Agent Suite · 6 AI agents purpose-built for freight · sits on top of any TMS · M4 rate-floor guard LIVE",
+            "Hot Shot TMS · operator-grade system of record for the segment incumbents deprioritize",
+            "Vertical productization · JadeOS Quantum AI > Jade Broker tier > JadeOS-Agent Suite agents > Hot Shot TMS = one stack story",
          ]},
 
         {"n": 5, "kind": "agents",
-         "title": "Six agents · ship-status honest",
+         "title": "JadeOS-Agent Suite · six agents · ship-status honest",
          "bullets": [
-            "M4 · Pricing + Rate-Floor Guard · LIVE in production today · /api/quotes/validate",
-            "M2 · Route + Fuel Agent · LIVE · OSRM routing + real OSM truck stops · MILP pending Pilot",
-            "M3 · Compliance + Safety · LIVE · FMCSA §395 codified · audit-pack PDF pending Pilot",
-            "M1 · Dispatch Optimizer · PILOT-PHASE · deterministic MVP at /api/agent/dispatch/recommend",
-            "M5 · Driver Lifecycle · PILOT-PHASE · /api/agent/retention/risk · 0-100 weighted scoring",
-            "M6 · Predictive Maintenance · PILOT-PHASE · /api/agent/maintenance/window · J1939 + PM thresholds",
+            "M4 · Pricing + Rate-Floor Guard · LIVE in production · /api/quotes/validate",
+            "M2 · Route + Fuel · LIVE · OSRM + real OSM truck stops · MILP pending Pilot",
+            "M3 · Compliance + Safety · LIVE · FMCSA §395 codified · audit-pack pending Pilot",
+            "M1 · Dispatch Optimizer · PILOT-PHASE · deterministic MVP · /api/agent/dispatch/recommend",
+            "M5 · Driver Lifecycle · PILOT-PHASE · /api/agent/retention/risk",
+            "M6 · Predictive Maintenance · PILOT-PHASE · /api/agent/maintenance/window",
          ]},
 
         {"n": 6, "kind": "moat",
-         "title": "Why this combination wins",
+         "title": "Why three-in-tandem wins",
          "bullets": [
-            "Greenfield TMS · we target the segment incumbent TMS vendors deprioritize · less competition · faster sales cycle",
-            "Operator credibility · 13 years inside trucks, not 13 quarters inside slides",
-            "Agents work both ways · sell on top of Hot Shot OR on top of the prospect's existing TMS",
-            "Audit substrate · SHA-256 hash chain, rate-floor guard, immutable claims · enterprise-ready from day 0",
-            "Real prospects · 14 FMCSA-verified MN freight companies seeded · zero synthetic leads",
+            "JadeOS Quantum AI owns the consumer/prosumer entry point · 50+ modules · $19/mo Pro · $99-499 Enterprise",
+            "JadeOS-Agent Suite converts JadeOS Quantum AI's freight-broker community (Jade Broker tier) into a vertical AI suite",
+            "Hot Shot TMS catches carriers who have no TMS today · greenfield segment incumbents skip",
+            "All three share JadeOS Quantum AI's persistent-memory substrate + audit chain + biometric Face ID",
+            "Operator credibility · 13 years inside trucks · same builder shipped a 50-module consumer AI",
          ]},
 
-        {"n": 7, "kind": "roi",
-         "title": "ROI · Mid-Market · 175 trucks",
+        {"n": 7, "kind": "market",
+         "title": "Market · global TAM $520B",
          "bullets": [
-            "Annual savings ~ $1.8M – $2.4M (6 cost-savings categories · benchmark-cited)",
-            "Upfront $130k · Annual license $210k · 3-yr NPV ~ $4.5M @ 10% discount",
-            "Payback ~2-3 months · sensitivity band ±10%",
-            "Live ROI Modeler at /demo · prospect can recompute on their own",
-            "Sources · ATA · ATRI 2024 · BLS OEWS · EIA diesel · FMCSA · NICB",
+            "TAM · $520B · Productivity SaaS $260B + Ed-tech $150B + AI Tools $80B + Maker/IoT $30B",
+            "SAM · $48B · English-speaking + mid-tier orgs · prosumers · SMBs · K-12 · vocational",
+            "SOM · $1.6B · year 5-7 realistic capture · 3.3% of SAM at $14 blended ARPU x 9.5M users",
+            "Freight overlay · 13k MN motor carriers · 14 FMCSA-verified hot-list seeded in workbench",
          ]},
 
         {"n": 8, "kind": "traction",
-         "title": "Where we are today · build complete · ready to deploy",
+         "title": "Build complete. Ready to deploy.",
          "bullets": [
-            "Hot Shot TMS · fully developed · deployment-ready · zero customers yet by design (raising to launch)",
-            "JADE OS · production console live at /demo · 7 agent tabs · 6 OP labs · 8-phase 43-substep execution tracker",
-            "FMCSA-anchored Minnesota target list seeded in workbench · hot-list prospects identified",
-            "Workflow Memory + Active Claims + Risk Guard + Trucker AI all production-class today",
-            "Brand re-themer · type a company name → Claude Sonnet writes brand profile → app re-skins instantly",
+            "JadeOS Quantum AI flagship · product complete · 3 active beta testers · /jade live · biometric sign-in",
+            "JadeOS-Agent Suite · production console at /demo · 7 agent tabs · 6 OP labs · 8-phase execution tracker",
+            "Hot Shot TMS · fully developed · deployment-ready · zero customers yet by design",
+            "FMCSA-anchored MN target list seeded · workflow memory + claims + risk guard all live",
          ]},
 
-        {"n": 9, "kind": "competitive",
-         "title": "vs. Descartes / Omnitracs / Geotab / internal-build",
+        {"n": 9, "kind": "roi",
+         "title": "Economics · 5-year arc",
          "bullets": [
-            "Descartes · over-serves enterprise · we own the segment they deprioritize · agents still sit ABOVE Descartes for their customers",
-            "Omnitracs · telematics-strong · we consume the feed + add rate-floor guard + audit chain they don't ship",
-            "Geotab · visibility · we turn visibility into decisions; Hot Shot TMS captures the system of record",
-            "Internal build · 3 hires + 18 months · JADE OS + Hot Shot TMS · build-complete today · pilot in 90 days",
+            "Y1 · 25k MAU · 1,000 paying · $168k ARR run-rate · $95k monthly burn",
+            "Y3 · 200k MAU · 12k paying · $2.7M ARR · break-even by Q4",
+            "Y5 · 1.5M MAU · 120k paying · $31.7M ARR · profitable",
+            "Series A trigger · $50k MRR + 50k MAU + 5%+ free-to-paid sustained 3 months",
+            "Freight pilot ROI · mid-market 175-truck · $1.8-2.4M annual savings · 2-3 month payback",
          ]},
 
-        {"n": 10, "kind": "gtm",
-         "title": "Go-to-market · launch both in tandem",
+        {"n": 10, "kind": "competitive",
+         "title": "Competition · fragmented, all of it",
          "bullets": [
-            "Track A · sell JADE OS agents to existing TMS users (Descartes/McLeod/TMW shops) · ~30 hot-list MN carriers",
-            "Track B · sell Hot Shot TMS into the underserved hot-shot / small-mid carrier segment that has no good TMS today",
-            "Pilots at $25-40k all-in · 90 days · success metrics declared pre-pilot in writing",
-            "Channel · direct for top 5 prospects · TAM (Trucking Assoc of MN) for warm intros · LinkedIn for the rest",
-            "Both tracks share the same engineering + sales team · one cap table · two revenue lines",
+            "JadeOS Quantum AI vs ChatGPT/Cursor/Notion AI · we unify what they fragment · persistent memory across 50 modules",
+            "JadeOS-Agent Suite vs Descartes/Omnitracs/Geotab · we sit ABOVE their TMS as the decision layer",
+            "Hot Shot TMS · greenfield segment · no real competitor serves hot-shot carriers well",
+            "Internal build · 3 hires + 18 months · we ship all three today",
          ]},
 
         {"n": 11, "kind": "pricing",
-         "title": "Pricing · pilot to scale",
+         "title": "Pricing · three lines · one cap table",
          "bullets": [
-            "Pilot · 6 months · $25-40k all-in · subsidized integration · decision checkpoint at month 4",
-            "Hot Shot TMS license · $1,200/truck/year (mid-market) · custom enterprise tier",
-            "JADE OS agents · same $1,200/truck/year · sold standalone or bundled with TMS",
-            "Pilot exit · roll-forward credit if customer converts to annual",
+            "JadeOS Quantum AI · Free · Pro $19/mo · Enterprise $99-499/user/mo · white-label yr 3",
+            "JadeOS-Agent Suite pilots · $25-40k all-in · 6-month pilot · decision checkpoint month 4",
+            "JadeOS-Agent Suite license · $1,200/truck/year post-pilot · sold standalone or bundled with Hot Shot TMS",
+            "Hot Shot TMS · $1,200/truck/year mid-market · custom enterprise · brand-themed deployments",
          ]},
 
         {"n": 12, "kind": "ask",
          "title": "The Ask",
-         "subtitle": "$1.5M seed · 18-month runway · launch both products in tandem",
+         "subtitle": "$2.0M seed (SAFE · $12M post-money cap) · 18-month runway · all three products in market",
          "bullets": [
-            "Hire · 1 senior backend (multi-tenant + TMS connectors) · 1 sales lead · 1 customer success",
-            "Land · 3 paid TMS launches in underserved segment · 2 paid agent conversions in existing-TMS segment",
-            "Ship · multi-tenant rollout · M2 fuel-MILP · M3 audit-pack PDF · APScheduler · SOC 2 readiness",
-            "30-min discovery this week · investor-pitch + technical-brief + execution-plan PDFs available now",
+            "Engineering 45% · Eng #2 (full-stack AI) + tooling · Jade Pro · mobile app · SOC 2 prep",
+            "Growth 25% · PMM hire · ads + content · 50k MAU target · Product Hunt + HN + YC W26/S26",
+            "Ops & Compliance 12% · Legal · SOC 2 · insurance · accounting",
+            "Cloud & LLM Infra 10% · 18-month runway of compute",
+            "Founder salary 8% · 18 months · sole founder by design",
          ]},
     ],
 
     "fact_sheets": [
-        {"persona": "Small Regional · Hot Shot segment (25-75 trucks)", "headline": "Underserved by every incumbent TMS.",
-         "pains": ["No TMS fits their size + cost profile", "Dispatcher wears 5 hats", "Fuel + retention pressure"],
-         "lead_agent": "Hot Shot TMS · primary product · then add agents",
+        {"persona": "Prosumer / Builder (JadeOS Quantum AI flagship)", "headline": "8-14 SaaS subs unified into one command center.",
+         "pains": ["$187/mo on fragmented AI tools", "No persistent memory", "Voice-first nowhere"],
+         "lead_agent": "JadeOS Quantum AI · all 50+ modules · Pro $19/mo",
+         "expected_roi": "$150+/mo SaaS displacement"},
+        {"persona": "Freight Broker / Mid-Market Carrier", "headline": "AI agents on top of any TMS.",
+         "pains": ["Empty miles 15-22%", "Compliance scaling", "Dispatcher burden"],
+         "lead_agent": "JadeOS-Agent Suite · 6 agents · sits on existing or Hot Shot TMS",
+         "expected_roi": "$1.8-2.4M/yr · ~2-3 month payback (175 trucks)"},
+        {"persona": "Hot-shot / Small Regional (25-75 trucks)", "headline": "No TMS today serves them.",
+         "pains": ["Incumbents over-serve enterprise", "Lean ops · margin pressure", "Driver retention fragile"],
+         "lead_agent": "Hot Shot TMS · primary · then add JadeOS-Agent Suite agents",
          "expected_roi": "$280-450k/yr · ~6-month payback"},
-        {"persona": "Mid-Market (100-250 trucks · existing TMS)", "headline": "Has TMS · wants AI on top.",
-         "pains": ["Multi-dispatcher coordination", "TMS data fragmentation", "Compliance scaling"],
-         "lead_agent": "JADE OS agents · sits on top of Descartes/McLeod/TMW",
-         "expected_roi": "$1.8-2.4M/yr · ~2-3 month payback"},
-        {"persona": "Specialized / Hazmat (50-150 trucks)", "headline": "Compliance is existential.",
-         "pains": ["High regulatory burden", "Premium insurance", "Customer SLA strict"],
-         "lead_agent": "M3 Compliance Agent · with Hot Shot TMS or theirs",
-         "expected_roi": "$700k-1.1M/yr · payback <4 months"},
-        {"persona": "Greenfield enterprise (no TMS today)", "headline": "Wants the full stack on day 1.",
-         "pains": ["Greenfield deployment · single vendor preferred", "Brand-themed deployment", "Auditable substrate"],
-         "lead_agent": "Hot Shot TMS branded + JADE OS audit substrate · full stack",
-         "expected_roi": "Enterprise SLA · custom"},
+        {"persona": "Educator / Indie Maker / Vocational (Jade Schools/Maker)", "headline": "Voice-first AI for hands-on learning.",
+         "pains": ["Tools fragmented across CAD/slicer/drone/simulator", "No shared memory across kid/student work"],
+         "lead_agent": "JadeOS Quantum AI · Maker + Schools tier (planned Y2-3)",
+         "expected_roi": "Replaces 4-8 paid subscriptions per user"},
     ],
     "readiness_assessment": [
         {"area": "Data", "questions": [
             "ELD vendor & API access (Samsara / Geotab / Omnitracs / Motive)?",
             "Existing TMS vendor (or open to Hot Shot TMS as system of record)?",
-            "Fuel card export available?",
-            "Insurance claims feed available?"]},
+            "Voice + biometric tolerance (for JadeOS Quantum AI flagship deployments)?"]},
         {"area": "Process", "questions": [
             "Who currently owns dispatch decisions?",
             "Approval workflow for above-floor pricing exceptions?",
-            "Driver communication channel (app, SMS, dispatcher direct)?"]},
+            "Driver communication channel?"]},
         {"area": "Tech & Org", "questions": [
-            "Cloud / on-prem TMS host (or accept Hot Shot TMS hosted)?",
+            "Cloud / on-prem TMS host?",
             "IT bandwidth for a 4-week integration sprint?",
             "Executive sponsor for the pilot?"]},
     ],
     "competitive_brief": {
-        "vs_descartes": "Descartes over-serves enterprise. Hot Shot TMS owns the segment they deprioritize. JADE OS agents still sit ABOVE Descartes for their existing customers — so we sell into both segments.",
-        "vs_omnitracs": "Omnitracs leads on telematics hardware. We consume that feed and add rate-floor guard + audit substrate Omnitracs doesn't ship.",
-        "vs_geotab": "Geotab is fleet visibility. JADE OS turns visibility into decisions; Hot Shot TMS captures the system of record. One stack, two roles.",
-        "vs_internal_build": "Three hires + 18 months. JADE OS + Hot Shot TMS · build complete today · 90-day pilot · vendor-supported.",
+        "vs_chatgpt_cursor_notion": "Single-purpose AI tools that don't share memory. JadeOS Quantum AI unifies 50+ modules under one voice command and persistent memory.",
+        "vs_descartes": "Descartes over-serves enterprise. Hot Shot TMS owns the segment they deprioritize. JadeOS-Agent Suite agents sit ABOVE Descartes for their customers.",
+        "vs_omnitracs": "Omnitracs leads on telematics. We consume that feed and add rate-floor guard + audit substrate.",
+        "vs_internal_build": "Three hires + 18 months. Three products · build complete today · sole founder operating lean.",
     },
 }
 
@@ -954,7 +951,7 @@ PITCH_DECK = {
 
 TECHNICAL_DOC_SECTIONS = [
     {"title": "1 · Executive Overview", "body": (
-        "JADE OS is the operator-grade AI layer that composes freight-domain agents into a single, "
+        "JadeOS-Agent Suite is the operator-grade AI layer that composes freight-domain agents into a single, "
         "auditable workflow. This brief documents what ships in production today, what's pilot-phase "
         "(deterministic MVP live; full ML/ingest layer activates during a paid pilot), and what's on "
         "the Phase-4 Scale roadmap.\n\n"
@@ -1078,8 +1075,8 @@ def generate_technical_doc_pdf(output_path: str) -> str:
     meta_style = ParagraphStyle("M", parent=styles["BodyText"], fontSize=9, leading=12,
                                  textColor=colors.HexColor("#666666"), spaceAfter=18)
     flow = [
-        Paragraph("JADE OS · Benefits &amp; Features Technical Brief", title_style),
-        Paragraph(f"Prepared by JADE OS · Operations Workbench · {datetime.now(timezone.utc).strftime('%B %d, %Y')}", meta_style),
+        Paragraph("JadeOS · Benefits &amp; Features Technical Brief", title_style),
+        Paragraph(f"Prepared by JadeOS · Operations Workbench · {datetime.now(timezone.utc).strftime('%B %d, %Y')}", meta_style),
         Paragraph("This document is operator-grade. Every number is benchmark-traceable; no synthetic data appears.", body_style),
         PageBreak(),
     ]
@@ -1144,7 +1141,7 @@ def generate_pitch_deck_pdf(output_path: str) -> str:
         "gtm": "10 · GO-TO-MARKET", "pricing": "11 · PRICING",
         "ask": "12 · THE ASK",
     }
-    company = PITCH_DECK.get("company", {}).get("name", "JADE OS")
+    company = PITCH_DECK.get("company", {}).get("name", "JadeOS-Agent Suite")
 
     def _wrap(text, max_chars):
         """Naive word wrap on character budget."""
@@ -1273,7 +1270,7 @@ def generate_pitch_deck_pdf(output_path: str) -> str:
         c.setFillColor(MUTED)
         c.setFont("Helvetica", 8)
         c.drawString(60, 40, f"{sl['n']:02d} / {total:02d}")
-        c.drawCentredString(PAGE_W / 2, 40, "JADE OS · Hot Shot TMS")
+        c.drawCentredString(PAGE_W / 2, 40, "JadeOS · Hot Shot TMS")
         c.drawRightString(PAGE_W - 60, 40, "INVESTOR PACKAGE · 2026")
 
         c.showPage()
@@ -1340,7 +1337,7 @@ def generate_deep_plan_pdf(output_path: str, phases_from_db: Optional[List[Dict[
     pct = round((done_steps / total_steps) * 100, 1) if total_steps else 0
 
     flow = []
-    flow.append(Paragraph("JADE OS · Sales Engineering Execution Plan", title_style))
+    flow.append(Paragraph("JadeOS-Agent Suite · Sales Engineering Execution Plan", title_style))
     flow.append(Paragraph(
         f"8 Phases · {total_steps} substeps · ~{total_hours}h budget (~{round(total_hours / 8, 1)} working days) · "
         f"progress {pct}% ({done_steps}/{total_steps}) · generated "

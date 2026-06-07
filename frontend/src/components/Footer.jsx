@@ -9,7 +9,7 @@ export default function Footer() {
             <div className="h-8 w-8 border border-[#ccff00] grid place-items-center">
               <span className="font-display text-[#ccff00] font-black">J</span>
             </div>
-            <span className="font-display font-bold text-white text-lg">JADE OS</span>
+            <span className="font-display font-bold text-white text-lg">JadeOS</span>
           </div>
           <p className="text-sm text-white/60 max-w-md leading-relaxed">
             Operator-grade AI agents for Minneapolis freight, ops, and revenue teams.
@@ -44,7 +44,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-white/5 py-5 text-center mono-label text-white/30">
-        © 2026 JADE OS · ALL OPERATIONS LOCKED IN
+        © 2026 JadeOS · ALL OPERATIONS LOCKED IN
       </div>
     </footer>
   );

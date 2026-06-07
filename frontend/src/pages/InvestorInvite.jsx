@@ -1,12 +1,12 @@
 /**
  * InvestorInvite — Full VC package landing page.
- * Positions JADE OS (six AI agents) + Hot Shot TMS (operator-built TMS) as one
+ * Positions JadeOS-Agent Suite (six AI agents) + Hot Shot TMS (operator-built TMS) as one
  * investable stack. Replaces the previous slide-based pitch.
  *
  * Sections:
  *  • Hero · The Joint Offering
  *  • Founder Credential · 13-year operator
- *  • The Two Products · TMS + JADE OS side-by-side
+ *  • The Two Products · TMS + JadeOS-Agent Suite side-by-side
  *  • Six Agents · ship-status honest (live from /api/agent/modules/status)
  *  • Traction · production users + Tennant rethemed deployment
  *  • ROI · pre-baked Mid-Market 175-truck case
@@ -98,16 +98,17 @@ export default function InvestorInvite() {
                         INVESTOR INVITE · PRE-SEED · 2026 · MINNEAPOLIS, MN
                     </div>
                     <h1 className="font-display font-black text-white mt-4 leading-[0.95] tracking-tight text-5xl sm:text-6xl lg:text-7xl">
-                        One TMS.<br />Six AI agents.<br />
+                        One founder.<br />Three products.<br />
                         <span style={{ color: ACCENT.jade }}>One investable thesis.</span>
                     </h1>
                     <p className="font-mono-tech text-base sm:text-lg text-white/75 mt-8 max-w-3xl leading-relaxed">
-                        <span className="text-[#00ffff]">JADE OS</span> is the AI operating layer.{" "}
-                        <span className="text-[#ccff00]">Hot Shot TMS</span> is the production-grade
-                        transportation management system underneath &mdash; <em className="text-white">built by a 13-year
-                        operator</em>, purpose-built for the hot-shot &middot; small-to-mid carrier
-                        segment that incumbent TMS vendors deprioritize. Both fully developed.
-                        Both ready to deploy. <span className="text-[#ccff00]">Raising to launch both in tandem.</span>
+                        <span className="text-[#7c5cff]">JadeOS Quantum AI</span> is the flagship AI command center &mdash; 50+ modules,
+                        voice-first, persistent memory, 128-qubit Qiskit Aer + Claude Haiku 4.5.{" "}
+                        <span className="text-[#00ffff]">JadeOS-Agent Suite</span> is the freight-vertical agent productization
+                        for logistics. <span className="text-[#ccff00]">Hot Shot TMS</span> is the operator-built
+                        system of record for the underserved hot-shot segment.{" "}
+                        <span className="text-[#ccff00]">All three built solo by Oliver Cummins. All three ready
+                        to deploy. Raising in tandem.</span>
                     </p>
                     <div className="flex flex-wrap gap-3 mt-10">
                         <a href={`mailto:${askEmail}?subject=JADE%20OS%20%2B%20Hot%20Shot%20TMS%20Investor%20Discovery`}
@@ -135,9 +136,9 @@ export default function InvestorInvite() {
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-12">
                         <Stat k="HEADQUARTERS" v="MPLS · MN" c={ACCENT.jade} sub="Minnesota beachhead" />
-                        <Stat k="FOUNDER · YRS IN INDUSTRY" v="13" c={ACCENT.cyan} sub="Transportation operator" />
-                        <Stat k="PRODUCTS · BUILD STATUS" v="2 / READY" c={ACCENT.violet} sub="TMS + AI agents · deployment-ready" />
-                        <Stat k="FUNDING TRACK" v="DUAL" c={ACCENT.magenta} sub="Launch both in tandem" />
+                        <Stat k="FOUNDER" v="OLIVER CUMMINS" c={ACCENT.cyan} sub="Sole · 13-yr operator + builder" />
+                        <Stat k="PRODUCTS · BUILD STATUS" v="3 / READY" c={ACCENT.violet} sub="JadeOS Quantum AI · JadeOS-Agent Suite · Hot Shot TMS" />
+                        <Stat k="SEED ASK" v="$2.0M" c={ACCENT.magenta} sub="SAFE · $12M post-money cap" />
                     </div>
                 </div>
             </section>
@@ -149,7 +150,7 @@ export default function InvestorInvite() {
                     <div className="relative border border-white/10 p-7 bg-gradient-to-br from-[#0a0c18] to-[#0f1426]">
                         <CornerBrackets />
                         <p className="font-mono-tech text-base text-white/85 leading-relaxed">
-                            JADE OS + Hot Shot TMS were both built by a <span className="text-[#ccff00] font-bold">13-year transportation
+                            JadeOS-Agent Suite + Hot Shot TMS were both built by a <span className="text-[#ccff00] font-bold">13-year transportation
                             operator</span>. The TMS was the system the operator wished he had for a decade.
                             The AI agents automate the exact decisions the operator was making 60 times a day &mdash;
                             dispatch, pricing, compliance, retention.
@@ -205,8 +206,8 @@ export default function InvestorInvite() {
                                  style={{ background: "linear-gradient(180deg, transparent 55%, rgba(6,8,15,0.92) 100%)" }} />
                             <div className="absolute bottom-0 left-0 right-0 p-4">
                                 <div className="mono-label text-[10px] text-[#00ffff]">FOUNDER · CEO</div>
-                                <div className="font-display font-black text-white text-xl mt-1 leading-tight">Founder Name</div>
-                                <div className="font-mono-tech text-[10.5px] text-[#ccff00] mt-1">13-year transportation operator · Minneapolis · MN</div>
+                                <div className="font-display font-black text-white text-xl mt-1 leading-tight">Oliver Cummins</div>
+                                <div className="font-mono-tech text-[10.5px] text-[#ccff00] mt-1">Sole founder · 13-yr transportation operator · Minneapolis · MN</div>
                             </div>
                         </div>
                         <div className="px-4 py-3 border-t border-white/10 flex flex-wrap gap-3 bg-[#0a0c18]">
@@ -229,13 +230,13 @@ export default function InvestorInvite() {
                             </p>
                             <p className="font-mono-tech text-[13.5px] text-white/70 mt-4 leading-relaxed">
                                 Every recurring decision in that thirteen years &mdash; dispatch matching, rate-floor enforcement, HOS feasibility,
-                                retention conversations, maintenance triage &mdash; is now an agent inside <span className="text-[#00ffff]">JADE OS</span>.
+                                retention conversations, maintenance triage &mdash; is now an agent inside <span className="text-[#00ffff]">JadeOS-Agent Suite</span>.
                                 The agents aren&apos;t guesses. They&apos;re a documented operator playbook converted into code.
                             </p>
                             <blockquote className="mt-5 border-l-2 border-[#ccff00] pl-4">
                                 <p className="font-display font-bold text-white text-lg leading-snug">
                                     &ldquo;Hot Shot TMS is the system I built because none of the incumbents
-                                    served the segment I actually worked in. JADE OS is the AI layer for every
+                                    served the segment I actually worked in. JadeOS-Agent Suite is the AI layer for every
                                     decision I made 60 times a day.&rdquo;
                                 </p>
                                 <footer className="font-mono-tech text-[11px] text-[#ccff00] mt-2">— Founder · 13-yr transportation operator</footer>
@@ -248,7 +249,7 @@ export default function InvestorInvite() {
                                 { yrs: "YR 1-3", role: "Dispatcher", note: "Hot-shot fleet · 14 trucks · ran the desk solo nights & weekends", c: ACCENT.jade },
                                 { yrs: "YR 4-7", role: "Pricing + RFP Lead", note: "Lane-rate analysis · rate-floor discipline · contract vs spot mix", c: ACCENT.cyan },
                                 { yrs: "YR 8-10", role: "Compliance & Safety", note: "FMCSA §395/396 in production · CSA-score work · audit-pack hand-runs", c: ACCENT.violet },
-                                { yrs: "YR 11-13", role: "Operations + Builder", note: "Spec'd the TMS the segment needed · then built it with JADE OS on top", c: ACCENT.amber },
+                                { yrs: "YR 11-13", role: "Operations + Builder", note: "Spec'd the TMS the segment needed · then built it with JadeOS-Agent Suite on top", c: ACCENT.amber },
                             ].map((ch, i) => (
                                 <div key={i} className="border p-3" style={{ borderColor: `${ch.c}44`, background: `${ch.c}08` }}>
                                     <div className="mono-label text-[9.5px]" style={{ color: ch.c }}>{ch.yrs}</div>
@@ -293,31 +294,90 @@ export default function InvestorInvite() {
                 </div>
             </Section>
 
-            {/* ===================== TWO PRODUCTS ===================== */}
+            {/* ===================== THREE PRODUCTS ===================== */}
             <Section id="products" eyebrow="02 · THE STACK" eyebrowColor={ACCENT.jade}
-                     title={<>Two products.<br /><span style={{ color: ACCENT.jade }}>One investable thesis.</span></>}>
+                     title={<>Three products.<br /><span style={{ color: ACCENT.jade }}>One investable thesis.</span></>}>
                 <p className="font-mono-tech text-[13px] text-white/65 max-w-3xl leading-relaxed -mt-3 mb-6">
-                    Most VCs want AI agents that work on top of <em>existing</em> TMS. Our TMS targets a segment
-                    incumbent TMS vendors deprioritize &mdash; so we&apos;re launching it in tandem with the agent
-                    raise. Same engineering team. Two revenue lines.
+                    JadeOS Quantum AI is the flagship. JadeOS-Agent Suite is the freight-vertical productization. Hot Shot TMS is the
+                    operator-built system of record. Same builder. Same persistent-memory substrate. One cap table.
                 </p>
-                <div className="grid lg:grid-cols-2 gap-5">
-                    <div className="relative border border-[#ccff0033] p-6 bg-gradient-to-br from-[#0a0c18] to-[#13180a]" data-testid="product-tms">
+                <div className="grid lg:grid-cols-3 gap-5">
+                    {/* JadeOS Quantum AI flagship */}
+                    <div className="relative border border-[#7c5cff33] p-6 bg-gradient-to-br from-[#0a0c18] to-[#15102a]" data-testid="product-jade">
                         <CornerBrackets />
-                        <div className="mono-label text-[11px] text-[#ccff00]">PRODUCT 01 · SYSTEM OF RECORD</div>
-                        <h3 className="font-display font-black text-white text-3xl mt-2">Hot Shot TMS</h3>
+                        <div className="mono-label text-[11px] text-[#7c5cff]">PRODUCT 01 · FLAGSHIP</div>
+                        <h3 className="font-display font-black text-white text-3xl mt-2">JadeOS Quantum AI</h3>
                         <p className="font-mono-tech text-[13px] text-white/65 mt-3 leading-relaxed">
-                            Operator-built transportation management for the hot-shot &middot; small-to-mid carrier segment
-                            that <span className="text-[#ccff00]">incumbent TMS vendors don&apos;t serve well</span>.
-                            Fully developed. <span className="text-[#ccff00]">Deployment-ready.</span> Zero customers yet
-                            by design &mdash; raising to launch.
+                            The AI command center for builders, founders, and lifelong learners. 50+ modules,
+                            voice-first <span className="text-[#7c5cff]">&ldquo;Hey Jade&rdquo;</span>, persistent memory across modules.
+                            <span className="text-[#7c5cff]"> 128-qubit Qiskit Aer + Claude Haiku 4.5.</span>
                         </p>
                         <div className="grid grid-cols-3 gap-2 mt-5">
+                            {[["50+", "MODULES"], ["128", "QUBITS"], ["3", "BETA"]].map(([v, k], i) => (
+                                <div key={i} className="border border-white/10 p-3">
+                                    <div className="font-display font-black text-[#7c5cff] text-xl">{v}</div>
+                                    <div className="mono-label text-[9px] text-white/55 mt-1">{k}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <ul className="mt-5 space-y-1.5">
                             {[
-                                ["BUILD", "COMPLETE"],
-                                ["6", "MODES · TL · LTL · OCEAN · AIR · PARCEL · RAIL"],
-                                ["READY", "TO DEPLOY"],
-                            ].map(([v, k], i) => (
+                                "Unifies 8-14 fragmented SaaS subs · $187/mo avg power-user spend",
+                                "Voice-first · biometric Face ID sign-in · 7-day session",
+                                "Pricing · Free / Pro $19/mo / Enterprise $99-499/user/mo",
+                                "5-yr arc · $31.7M ARR by Y5 · break-even Q4 Y3",
+                            ].map((t, i) => (
+                                <li key={i} className="font-mono-tech text-[11px] text-white/75 flex gap-2">
+                                    <span className="text-[#7c5cff]">●</span>{t}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* JadeOS-Agent Suite */}
+                    <div className="relative border border-[#00ffff33] p-6 bg-gradient-to-br from-[#0a0c18] to-[#0a1820]" data-testid="product-jadeos">
+                        <CornerBrackets />
+                        <div className="mono-label text-[11px] text-[#00ffff]">PRODUCT 02 · FREIGHT-VERTICAL AGENTS</div>
+                        <h3 className="font-display font-black text-white text-3xl mt-2">JadeOS-Agent Suite</h3>
+                        <p className="font-mono-tech text-[13px] text-white/65 mt-3 leading-relaxed">
+                            Six AI agents that sit on top of any TMS &mdash; Hot Shot or Descartes/McLeod/TMW.
+                            Rate-floor guard, audit chain, workflow memory, active claims all production-class.
+                            The vertical productization of JadeOS Quantum AI for logistics.
+                        </p>
+                        <div className="grid grid-cols-3 gap-2 mt-5">
+                            {[["6", "AGENTS"], ["1", "LIVE PROD"], ["2", "LIVE PARTIAL"]].map(([v, k], i) => (
+                                <div key={i} className="border border-white/10 p-3">
+                                    <div className="font-display font-black text-[#00ffff] text-xl">{v}</div>
+                                    <div className="mono-label text-[9px] text-white/55 mt-1">{k}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <ul className="mt-5 space-y-1.5">
+                            {[
+                                "Sells on top of Hot Shot OR any incumbent TMS · two GTM tracks",
+                                "Rate-floor guard + SHA-256 immutable audit chain",
+                                "Workflow memory · 30+ day prospect threads with auto-distillation",
+                                "Public ROI Modeler · industry-benchmark math",
+                            ].map((t, i) => (
+                                <li key={i} className="font-mono-tech text-[11px] text-white/75 flex gap-2">
+                                    <span className="text-[#00ffff]">●</span>{t}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* Hot Shot TMS */}
+                    <div className="relative border border-[#ccff0033] p-6 bg-gradient-to-br from-[#0a0c18] to-[#13180a]" data-testid="product-tms">
+                        <CornerBrackets />
+                        <div className="mono-label text-[11px] text-[#ccff00]">PRODUCT 03 · SYSTEM OF RECORD</div>
+                        <h3 className="font-display font-black text-white text-3xl mt-2">Hot Shot TMS</h3>
+                        <p className="font-mono-tech text-[13px] text-white/65 mt-3 leading-relaxed">
+                            Operator-built transportation management for the hot-shot &middot; small-to-mid carrier
+                            segment that <span className="text-[#ccff00]">incumbent TMS vendors don&apos;t serve well</span>.
+                            Build complete &middot; deployment-ready &middot; zero customers yet by design.
+                        </p>
+                        <div className="grid grid-cols-3 gap-2 mt-5">
+                            {[["BUILD", "COMPLETE"], ["6", "MODES"], ["READY", "TO DEPLOY"]].map(([v, k], i) => (
                                 <div key={i} className="border border-white/10 p-3">
                                     <div className="font-display font-black text-[#ccff00] text-xl">{v}</div>
                                     <div className="mono-label text-[9px] text-white/55 mt-1">{k}</div>
@@ -329,44 +389,10 @@ export default function InvestorInvite() {
                                 "Targets the underserved hot-shot / small-to-mid carrier segment",
                                 "Brand re-themer · type a company name → app re-skins instantly",
                                 "Live map · dispatch board · BOL · invoicing · accessorials",
-                                "Multi-tenant ready · operator-grade UX from day 1",
+                                "Pairs with JadeOS-Agent Suite agents for the full stack story",
                             ].map((t, i) => (
                                 <li key={i} className="font-mono-tech text-[11px] text-white/75 flex gap-2">
                                     <span className="text-[#ccff00]">●</span>{t}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                    <div className="relative border border-[#00ffff33] p-6 bg-gradient-to-br from-[#0a0c18] to-[#0a1820]" data-testid="product-jadeos">
-                        <CornerBrackets />
-                        <div className="mono-label text-[11px] text-[#00ffff]">PRODUCT 02 · SYSTEM OF DECISIONS</div>
-                        <h3 className="font-display font-black text-white text-3xl mt-2">JADE OS</h3>
-                        <p className="font-mono-tech text-[13px] text-white/65 mt-3 leading-relaxed">
-                            Six AI agents that sit on top of any TMS &mdash; Hot Shot or Descartes/McLeod/TMW &mdash;
-                            and turn visibility into decisions. Pricing rate-floor guard, audit chain, workflow
-                            memory, active claims all production-class today.
-                        </p>
-                        <div className="grid grid-cols-3 gap-2 mt-5">
-                            {[
-                                ["6", "AI AGENTS"],
-                                ["1", "LIVE PRODUCTION"],
-                                ["2", "LIVE PARTIAL"],
-                            ].map(([v, k], i) => (
-                                <div key={i} className="border border-white/10 p-3">
-                                    <div className="font-display font-black text-[#00ffff] text-2xl">{v}</div>
-                                    <div className="mono-label text-[9px] text-white/55 mt-1">{k}</div>
-                                </div>
-                            ))}
-                        </div>
-                        <ul className="mt-5 space-y-1.5">
-                            {[
-                                "Sells on top of Hot Shot TMS OR any incumbent TMS · two go-to-market tracks",
-                                "Rate-floor guard with HARD/SOFT block + immutable SHA-256 audit chain",
-                                "Workflow memory · 30+ day prospect threads with auto-distillation",
-                                "Public ROI Modeler · industry-benchmark math · zero LLM cost",
-                            ].map((t, i) => (
-                                <li key={i} className="font-mono-tech text-[11px] text-white/75 flex gap-2">
-                                    <span className="text-[#00ffff]">●</span>{t}
                                 </li>
                             ))}
                         </ul>
@@ -375,7 +401,7 @@ export default function InvestorInvite() {
             </Section>
 
             {/* ===================== SIX AGENTS ===================== */}
-            <Section id="agents" eyebrow="03 · PRODUCT · JADE OS" eyebrowColor={ACCENT.violet}
+            <Section id="agents" eyebrow="03 · PRODUCT · JadeOS-Agent Suite" eyebrowColor={ACCENT.violet}
                      title={<>Six agents.<br /><span style={{ color: ACCENT.violet }}>Ship-status honest.</span></>}>
                 <p className="font-mono-tech text-[13px] text-white/65 max-w-3xl leading-relaxed -mt-3 mb-6">
                     We label exactly what ships in production, what&apos;s live-partial, and what&apos;s a deterministic-MVP
@@ -428,7 +454,7 @@ export default function InvestorInvite() {
                 <div className="grid lg:grid-cols-3 gap-4">
                     {[
                         { c: ACCENT.jade, h: "Hot Shot TMS · Build Complete", b: "Fully developed transportation management for the hot-shot / small-to-mid carrier segment. Deployment-ready · zero customers yet by design." },
-                        { c: ACCENT.cyan, h: "JADE OS Production Console", b: "/demo · 7 agent tabs · 6 OP labs · 8-phase 43-substep execution tracker. Live today." },
+                        { c: ACCENT.cyan, h: "JadeOS-Agent Suite Production Console", b: "/demo · 7 agent tabs · 6 OP labs · 8-phase 43-substep execution tracker. Live today." },
                         { c: ACCENT.violet, h: "Brand Re-themer", b: "Type a company name → Claude Sonnet 4.5 writes a brand profile → app re-skins instantly. Live." },
                         { c: ACCENT.magenta, h: "Risk Guard · Audit Chain", b: "Rate-floor guard with HARD/SOFT block. SHA-256 immutable event log. /api/audit/verify." },
                         { c: ACCENT.amber, h: "Workflow Memory + Claims", b: "30+ day prospect threads with auto-distillation. Active claims filing with mixed autonomy." },
@@ -446,17 +472,33 @@ export default function InvestorInvite() {
 
             {/* ===================== THE ASK ===================== */}
             <Section id="ask" eyebrow="06 · THE ASK" eyebrowColor={ACCENT.amber}
-                     title={<>$1.5M seed.<br /><span style={{ color: ACCENT.amber }}>18 months. Launch both products in tandem.</span></>}>
+                     title={<>$2.0M seed.<br /><span style={{ color: ACCENT.amber }}>SAFE · $12M post-money cap · 18-month runway · 3 products in market.</span></>}>
                 <p className="font-mono-tech text-[13px] text-white/65 max-w-3xl leading-relaxed -mt-3 mb-6">
-                    Most VCs want AI agents on top of existing TMS. Our TMS targets a segment incumbents
-                    deprioritize &mdash; so we&apos;re launching the TMS into that greenfield at the same time
-                    we sell agents into existing-TMS shops. Two tracks. One team. One cap table.
+                    JadeOS Quantum AI flagship into the prosumer/builder market. JadeOS-Agent Suite agents into existing-TMS freight shops.
+                    Hot Shot TMS into the underserved hot-shot segment. Three GTM tracks. One sole founder operating
+                    lean. One cap table.
                 </p>
                 <div className="grid lg:grid-cols-3 gap-3">
                     {[
-                        { h: "HIRE", c: ACCENT.jade, items: ["Senior backend · multi-tenant + TMS connectors", "Sales lead · transportation network", "Customer success · pilot ops"] },
-                        { h: "LAND", c: ACCENT.cyan, items: ["3 paid Hot Shot TMS launches in the underserved segment", "2 paid JADE OS conversions in existing-TMS shops", "1 brand-themed enterprise re-deploy"] },
-                        { h: "SHIP", c: ACCENT.violet, items: ["Multi-tenant rollout · per-tenant JWT + rate-floor isolation", "M2 fuel-arbitrage MILP · M3 audit-pack PDF", "APScheduler · SOC 2 readiness narrative"] },
+                        { h: "USE OF FUNDS", c: ACCENT.jade, items: [
+                            "Engineering 45% · Eng #2 (full-stack AI) + tooling · Jade Pro · mobile · SOC 2 prep",
+                            "Growth 25% · PMM hire · ads + content · 50k MAU target",
+                            "Ops & Compliance 12% · Legal · SOC 2 · insurance · accounting",
+                            "Cloud + LLM infra 10% · 18-month runway of compute",
+                            "Founder salary 8% · 18 months · sole founder by design",
+                        ] },
+                        { h: "LAND IN 18 MONTHS", c: ACCENT.cyan, items: [
+                            "JadeOS Quantum AI · 50k MAU · 1,000+ paying users · $50k+ MRR Series A trigger",
+                            "JadeOS-Agent Suite · 2 paid agent conversions in existing-TMS shops",
+                            "Hot Shot TMS · 3 paid launches in underserved hot-shot segment",
+                            "Brand-themed enterprise re-deploy (any product)",
+                        ] },
+                        { h: "SHIP IN 18 MONTHS", c: ACCENT.violet, items: [
+                            "Jade Pro · mobile app · marketplace beta",
+                            "JadeOS-Agent Suite · M2 fuel-MILP · M3 audit-pack PDF · multi-tenant JWT",
+                            "Hot Shot TMS · multi-tenant rollout · brand-themer at scale",
+                            "SOC 2 readiness narrative across all three",
+                        ] },
                     ].map((g, i) => (
                         <div key={i} className="relative border p-5" style={{ borderColor: `${g.c}55`, background: `${g.c}08` }}>
                             <CornerBrackets />
@@ -521,7 +563,7 @@ export default function InvestorInvite() {
             </Section>
 
             <div className="py-10 text-center font-mono-tech text-[10px] text-white/35">
-                JADE OS · Hot Shot TMS · Minneapolis · 2026 · investor-grade build
+                JadeOS · Hot Shot TMS · Minneapolis · 2026 · investor-grade build
             </div>
         </div>
     );
