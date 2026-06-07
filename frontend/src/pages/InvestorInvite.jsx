@@ -180,7 +180,7 @@ export default function InvestorInvite() {
                                 "Every decision in the platform has been made manually by the founder",
                                 "Every number is benchmark-cited · ATA · ATRI · BLS · EIA · FMCSA",
                                 "Every workflow has been used in a real dispatch shift",
-                                "Every UI element answers the operator&apos;s question, not the engineer&apos;s"
+                                "Every UI element answers the operator's question, not the engineer's"
                             ].map((t, i) => (
                                 <li key={i} className="font-mono-tech text-[11.5px] text-white/85 flex gap-2 leading-relaxed">
                                     <span className="text-[#ccff00]">▸</span>{t}
@@ -279,7 +279,7 @@ export default function InvestorInvite() {
                                 <ul className="space-y-1.5">
                                     {[
                                         "Hot-shot segment fully digitized but underserved by TMS incumbents",
-                                        "AI agents on top of TMS is the consensus VC thesis · we add a TMS layer they can&apos;t",
+                                        "AI agents on top of TMS is the consensus VC thesis · we add a TMS layer they can't",
                                         "Both products build-complete · 18 months to land · 6-month pilots ready",
                                     ].map((t, i) => (
                                         <li key={i} className="font-mono-tech text-[11px] text-white/85 flex gap-2 leading-relaxed">
