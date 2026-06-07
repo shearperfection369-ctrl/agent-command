@@ -5304,10 +5304,73 @@ async def trucker_state_511_list():
 
 
 # ============================================================
+# AGENT MODULES · M1 / M5 / M6 deterministic MVPs
+# ============================================================
+import agent_modules as agent_mod
+
+
+# ============================================================
 # OPERATIONS WORKBENCH · 6 Labs · 8 Phases · Risks · Decisions
 # ============================================================
 import ops_workbench as ow_mod
 from fastapi.responses import FileResponse
+
+
+@api.post("/agent/dispatch/recommend")
+async def agent_dispatch_recommend(body: Dict[str, Any]):
+    """M1 · Dispatch Optimizer · score driver-load pairings.
+
+    Body: { "drivers": [DriverState], "loads": [OpenLoad] }
+    Returns top-3 scored pairings per load with HOS feasibility + reasons.
+    """
+    try:
+        drivers = [agent_mod.DriverState(**d) for d in (body.get("drivers") or [])]
+        loads = [agent_mod.OpenLoad(**l) for l in (body.get("loads") or [])]
+    except Exception as e:
+        raise HTTPException(400, f"Invalid input: {e}")
+    if not drivers or not loads:
+        raise HTTPException(400, "drivers and loads are both required")
+    return agent_mod.score_dispatch(drivers, loads)
+
+
+@api.post("/agent/retention/risk")
+async def agent_retention_risk(body: Dict[str, Any]):
+    """M5 · Driver retention risk score (0-100) with recommended actions.
+
+    Body: DriverRetentionInput shape.
+    """
+    try:
+        inp = agent_mod.DriverRetentionInput(**body)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid input: {e}")
+    return agent_mod.score_retention(inp).model_dump()
+
+
+@api.post("/agent/maintenance/window")
+async def agent_maintenance_window(body: Dict[str, Any]):
+    """M6 · Predictive maintenance urgency + recommended window.
+
+    Body: MaintenanceInput shape (vehicle_id, miles_since_last_pm_a/b, fault_codes_30d, ...).
+    """
+    try:
+        inp = agent_mod.MaintenanceInput(**body)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid input: {e}")
+    return agent_mod.score_maintenance(inp).model_dump()
+
+
+@api.get("/agent/modules/status")
+async def agent_modules_status():
+    """Honest module ship-status manifest — what's live, partial, or pilot-phase."""
+    return {
+        "status": agent_mod.MODULE_STATUS,
+        "labels": {k: {"label": v[0], "color": v[1], "detail": v[2]}
+                   for k, v in agent_mod.MODULE_STATUS_LABEL.items()},
+        "generated_at": _utcnow_iso(),
+    }
+
+
+
 
 
 @api.get("/workbench/overview")

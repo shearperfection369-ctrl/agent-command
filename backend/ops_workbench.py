@@ -709,35 +709,53 @@ MARKET_ANALYSIS_FALLBACK_SECTIONS = [
 AI_ARCHITECTURE = {
     "modules": [
         {"id": "M1", "name": "Dispatch Optimizer Agent", "autonomy": "L2",
+         "ship_status": "shipping_pilot_phase",
          "inputs": ["load board feeds", "driver HOS state", "TMS open loads", "real-time ELD position"],
          "outputs": ["recommended driver-load assignment", "ETA + cost projection", "deadhead/empty-mile score"],
          "decision_logic": "constraint-satisfaction + utility scoring (cost, HOS, customer SLA, driver preference)",
-         "kpi": "empty-mile reduction 8-15% · dispatcher load 30-50% lower"},
+         "kpi": "empty-mile reduction 8-15% · dispatcher load 30-50% lower",
+         "live_endpoint": "/api/agent/dispatch/recommend",
+         "live_note": "Deterministic MVP ships today · LLM coaching layer + live TMS write-back wired in Pilot"},
         {"id": "M2", "name": "Route & Fuel Agent", "autonomy": "L2",
+         "ship_status": "shipping_partial",
          "inputs": ["origin/destination", "current diesel by region (EIA)", "weather", "DOT 511 traffic", "truck-restricted routes"],
          "outputs": ["optimal route", "fuel-stop schedule (cheapest qualifying stops)", "expected savings vs default"],
          "decision_logic": "graph routing + fuel-arbitrage MILP",
-         "kpi": "fuel savings 10-18% · on-time delivery +6-12 pp"},
+         "kpi": "fuel savings 10-18% · on-time delivery +6-12 pp",
+         "live_endpoint": "/api/trucker/route + /api/trucker/truck-stops",
+         "live_note": "Live · OSRM + OpenStreetMap. Fuel-arbitrage MILP + EIA daily diesel land in Pilot"},
         {"id": "M3", "name": "Compliance & Safety Agent", "autonomy": "L1 (suggest, human approves)",
+         "ship_status": "shipping_partial",
          "inputs": ["ELD HOS data", "FMCSA inspection history", "driver qualification files (DQF)", "vehicle maint records"],
          "outputs": ["pre-trip risk score", "DOT-audit-ready document set", "imminent-violation alerts"],
          "decision_logic": "rules engine on FMCSA Part 395/396 + anomaly detection",
-         "kpi": "violation reduction 40-60% · audit prep cycle from days→hours"},
+         "kpi": "violation reduction 40-60% · audit prep cycle from days→hours",
+         "live_endpoint": "/api/trucker/hos-check",
+         "live_note": "HOS rules engine live (FMCSA §395 codified). Audit-pack PDF generator + DQF ingest in Pilot"},
         {"id": "M4", "name": "Dynamic Pricing Agent", "autonomy": "L1 (rate floor enforced)",
+         "ship_status": "shipping_full",
          "inputs": ["historical lane rates", "spot vs contract index", "fuel surcharge", "driver/capacity availability"],
          "outputs": ["recommended sell rate", "rate-floor check (HARD/SOFT)", "win-probability"],
          "decision_logic": "elastic-net regression + rate-floor guard (Risk Guard module)",
-         "kpi": "margin uplift 1.5-3.0 pp · prevent below-floor quotes"},
+         "kpi": "margin uplift 1.5-3.0 pp · prevent below-floor quotes",
+         "live_endpoint": "/api/quotes/validate + /api/rate-floors",
+         "live_note": "Production · rate-floor guard live · immutable audit chain live · override requires written notes"},
         {"id": "M5", "name": "Driver Lifecycle Agent", "autonomy": "L1",
+         "ship_status": "shipping_pilot_phase",
          "inputs": ["dispatch history", "home-time requests", "pay structure", "engagement signals"],
          "outputs": ["retention-risk score", "personalized retention actions", "next-best-conversation prompts"],
          "decision_logic": "survival analysis + LLM coaching template",
-         "kpi": "12-month retention +6-12 pp"},
+         "kpi": "12-month retention +6-12 pp",
+         "live_endpoint": "/api/agent/retention/risk",
+         "live_note": "Deterministic MVP scoring live · survival model + LLM coaching template in Pilot"},
         {"id": "M6", "name": "Carrier Matching & Predictive Maintenance", "autonomy": "L2",
+         "ship_status": "shipping_pilot_phase",
          "inputs": ["fault codes/J1939", "service history", "carrier KPIs (broker side)"],
          "outputs": ["maintenance window recommendation", "carrier scorecard for tenders"],
          "decision_logic": "anomaly detection + reliability scoring",
-         "kpi": "unplanned downtime -20-30%"},
+         "kpi": "unplanned downtime -20-30%",
+         "live_endpoint": "/api/agent/maintenance/window",
+         "live_note": "Deterministic urgency scoring live · J1939 live-ingest + carrier scorecard in Pilot"},
     ],
     "data_pipeline": [
         {"stage": "Sources", "items": ["ELD (Samsara/Geotab/Omnitracs)", "TMS (Descartes/McLeod/TMW/Selerant)", "Fuel cards (EFS/Comdata/WEX)", "Insurance/claims (Great West, Northland)"]},
@@ -875,67 +893,82 @@ PITCH_DECK = {
 
 TECHNICAL_DOC_SECTIONS = [
     {"title": "1 · Executive Overview", "body": (
-        "JADE OS is the operator-grade AI layer that composes six freight-domain agents into a single, "
-        "auditable workflow. This brief documents the platform's modules, data pipeline, decision logic, "
-        "ROI rationale, implementation cadence, and the Minnesota mid-market opportunity in one document.\n\n"
-        "• Six agent modules · Dispatch · Route+Fuel · Compliance · Pricing · Retention · Maintenance\n"
-        "• L1/L2 autonomy levels by module · suggest-vs-act gating tuned to risk\n"
+        "JADE OS is the operator-grade AI layer that composes freight-domain agents into a single, "
+        "auditable workflow. This brief documents what ships in production today, what's pilot-phase "
+        "(deterministic MVP live; full ML/ingest layer activates during a paid pilot), and what's on "
+        "the Phase-4 Scale roadmap.\n\n"
+        "• Module ship status · 1 LIVE (M4 Pricing/Rate-Floor) · 2 LIVE-PARTIAL (M2 Route, M3 Compliance) · 3 PILOT-PHASE (M1 Dispatch, M5 Retention, M6 Maintenance)\n"
+        "• Cross-cutting substrate · workflow memory, claims, rate floors, immutable audit chain — all LIVE\n"
         "• 90-day pilot template · 4-phase rollout · success metrics declared pre-pilot\n"
-        "• Rate-floor guard + immutable audit trail at the platform level, not per module\n"
+        "• Honest framing · M1/M5/M6 ship as deterministic MVPs today; full LLM coaching + survival models land in Pilot\n"
         "• Built on the same workflow-memory + claims/risk substrate you can audit in the console")},
-    {"title": "2 · Module M1 · Dispatch Optimizer · Deep Dive", "body": (
-        "M1 consumes ELD HOS state, TMS open loads, driver preferences, and customer SLAs to score every "
-        "candidate driver-load pairing in <50ms. The scoring blends cost-to-serve, deadhead minutes, HOS "
-        "feasibility, and customer-priority weighting.\n\n"
-        "• Inputs · ELD HOS, TMS open loads (real-time), driver pref profile, lane rates\n"
-        "• Decision · constraint-satisfaction + utility (cost · HOS · SLA · driver fit)\n"
-        "• Action · recommend to dispatcher (L2) · on approval, writes to TMS via API\n"
-        "• KPIs · empty-mile reduction 8-15% · dispatcher load -30-50% · time-to-dispatch -40%\n"
-        "• Failure modes · stale TMS feed → falls back to last-known; driver-pref absent → uses fleet defaults")},
-    {"title": "3 · Module M2 · Route + Fuel Agent · Deep Dive", "body": (
-        "M2 computes the cost-optimal route given current diesel pricing (EIA · regional), weather, DOT 511 "
-        "incident feeds, and truck-restricted segments. It then plans fuel stops by solving a small MILP that "
-        "picks the cheapest qualifying station within range that meets the next-leg dwell constraints.\n\n"
-        "• Inputs · O/D, EIA diesel, weather, DOT 511, truck-restricted layer, driver loyalty stops\n"
-        "• Decision · graph routing + fuel-arbitrage MILP\n"
-        "• Action · push optimized route + fuel-stop sequence to driver app\n"
-        "• KPIs · fuel savings 10-18% · OTD +6-12 pp · re-route count -50%\n"
-        "• Compliance · prefers driver-loyalty stops when within $0.05/gal of optimum")},
-    {"title": "4 · Module M3 · Compliance + Safety · Deep Dive", "body": (
-        "M3 turns FMCSA Part 395 (HOS) and Part 396 (Vehicle Maintenance) into runnable rules. It runs every "
-        "pre-trip and posts an audit-ready document set for every dispatch. Anomalies route to a human review queue.\n\n"
-        "• Inputs · ELD HOS, DQF, vehicle maint history, prior FMCSA inspections\n"
-        "• Decision · rules engine + anomaly detection on inspection history\n"
-        "• Action · pre-trip score 0-100; >70 hard-blocks dispatch and routes to safety\n"
-        "• KPIs · violation drop 40-60% · audit-pack prep · days → hours · CSA score trend\n"
-        "• Audit trail · every dispatch decision linked to compliance signature")},
-    {"title": "5 · Module M4 · Pricing + Rate-Floor Guard · Deep Dive", "body": (
-        "M4 recommends sell rates using lane-rate history, spot/contract index, fuel surcharge, and capacity. "
-        "Before any quote leaves the system, the Rate-Floor Guard validates against a per-lane / per-customer "
-        "floor and emits a HARD block or SOFT warning. No quote bypasses this gate.\n\n"
-        "• Inputs · 24-mo lane rates, DAT/Greenscreens spot index, fuel surcharge, capacity availability\n"
-        "• Decision · elastic-net regression with rate-floor invariant\n"
-        "• Action · recommended sell rate + floor verdict (PASS / SOFT / HARD)\n"
-        "• KPIs · margin uplift 1.5-3.0 pp · below-floor quote attempts blocked · win-rate stable\n"
-        "• Hard block · only an authorized role can override, override is immutably audited")},
-    {"title": "6 · Module M5 · Driver Lifecycle · Deep Dive", "body": (
-        "M5 scores driver retention risk continuously and surfaces personalized retention actions to "
-        "dispatchers and driver-managers. It also drafts the next-best conversation using an LLM constrained "
-        "by the driver's last 90 days of activity.\n\n"
-        "• Inputs · dispatch history, home-time requests, pay history, comm-channel engagement\n"
-        "• Decision · survival analysis + LLM coaching template (no fabrication; cites events)\n"
-        "• Action · weekly retention queue with recommended action per driver\n"
-        "• KPIs · 12-mo retention +6-12 pp · turnover cost saved $400-900 per driver · NPS lift")},
-    {"title": "7 · Module M6 · Predictive Maintenance + Carrier Match · Deep Dive", "body": (
-        "M6 catches J1939 fault patterns and routes them to a recommended maintenance window. On the broker side, "
-        "the same agent scores carriers for tendering — combining KPI history, claims, and recent volume.\n\n"
-        "• Inputs · J1939 fault codes, service history; (broker) carrier KPIs + claims + volume\n"
-        "• Decision · anomaly detection + reliability scoring\n"
-        "• Action · maintenance-window recommendation; carrier scorecard for tenders\n"
-        "• KPIs · unplanned downtime -20-30% · carrier on-time +5-10 pp")},
+    {"title": "2 · Module M1 · Dispatch Optimizer · Deep Dive (PILOT-PHASE)",
+     "body": (
+        "Status today · Deterministic MVP ships at POST /api/agent/dispatch/recommend. Scores every "
+        "candidate driver-load pairing using constraint-satisfaction + utility weighting "
+        "(cost, HOS feasibility, customer priority, driver lane preference). Returns top-3 per load.\n\n"
+        "• Inputs (live MVP) · driver lat/lon + HOS state + lane prefs · load O/D + window + priority + revenue\n"
+        "• Decision (live MVP) · cost·priority·deadhead·HOS-feasibility utility score · deterministic, reproducible\n"
+        "• Action (Pilot) · TMS write-back via Descartes/McLeod/TMW APIs · currently returns recommendations only\n"
+        "• KPIs · empty-mile reduction 8-15% · dispatcher load -30-50% · time-to-dispatch -40% (target band, validated in pilot)\n"
+        "• Pilot-phase add-ons · LLM dispatcher-coaching prompts · real-time ELD position ingest · live load-board feed")},
+    {"title": "3 · Module M2 · Route + Fuel Agent · Deep Dive (LIVE · PARTIAL)",
+     "body": (
+        "Status today · Live routing at POST /api/trucker/route (OSRM) + truck-stops + fuel/parking at "
+        "POST /api/trucker/truck-stops (OpenStreetMap Overpass). Weather + DOT 511 directory + state-truck "
+        "restriction warnings ship today.\n\n"
+        "• Inputs (live) · O/D, OSM stops, NOAA weather, 50-state DOT 511 directory\n"
+        "• Decision (live) · graph routing via OSRM\n"
+        "• Action (live) · returns route + qualifying stops + weather; explicit warning that auto profile must be cross-checked vs state truck restrictions\n"
+        "• KPIs · fuel savings target 10-18% · validated when MILP + EIA daily diesel land in Pilot\n"
+        "• Pilot-phase add-ons · fuel-arbitrage MILP picking cheapest qualifying station · EIA daily diesel feed (key required) · driver loyalty-stop preference")},
+    {"title": "4 · Module M3 · Compliance + Safety · Deep Dive (LIVE · PARTIAL)",
+     "body": (
+        "Status today · FMCSA §395 HOS rules are codified locally; POST /api/trucker/hos-check returns "
+        "violations cited to paragraph + remaining drive/duty/break hours. /api/trucker/hos-rules returns "
+        "the federal limits dict.\n\n"
+        "• Inputs (live) · driver HOS state (driving hours so far, on-duty hours so far, last break)\n"
+        "• Decision (live) · rules engine on FMCSA Part 395 · violations cited to §395.3(a)(2)/(3) etc.\n"
+        "• Action (live) · returns issues list + remaining hours; integrates with M1 dispatch feasibility\n"
+        "• KPIs · violation drop 40-60% target · audit-pack prep · days → hours (validated in pilot)\n"
+        "• Pilot-phase add-ons · DOT-audit-ready PDF pack generator · DQF (Driver Qualification File) ingest · §396 vehicle inspection rules engine · CSA-score trend dashboard")},
+    {"title": "5 · Module M4 · Pricing + Rate-Floor Guard · Deep Dive (LIVE · PRODUCTION)",
+     "body": (
+        "Status today · LIVE in production. POST /api/quotes/validate runs every quote against a "
+        "layered floor (manual + formula + historical P25), assigns LOW/MEDIUM/HIGH/CRITICAL severity, "
+        "and emits AUTO_OK / QUEUE_REVIEW / HARD_BLOCK. HARD_BLOCK can only be cleared by an authorized "
+        "override with written notes — both the block and the override are immutably audit-chained.\n\n"
+        "• Inputs (live) · proposed sell rate · carrier pay · lane code · equipment · cost basis\n"
+        "• Decision (live) · max(manual, formula, historical_p25) floor; severity bands; decision matrix\n"
+        "• Action (live) · persists quote_review row + audit event regardless of outcome; SLA timer per severity\n"
+        "• KPIs · margin uplift 1.5-3.0 pp · 100% of below-floor quote attempts blocked\n"
+        "• Hard block · only an authorized role can override; override is immutably audited")},
+    {"title": "6 · Module M5 · Driver Lifecycle · Deep Dive (PILOT-PHASE)",
+     "body": (
+        "Status today · Deterministic MVP ships at POST /api/agent/retention/risk. Scores 0-100 with "
+        "transparent weighted factors (home-time deficit, pay stagnation, tenure cliffs, complaints, "
+        "safety events, mileage outliers). Returns LOW/MEDIUM/HIGH/CRITICAL band + top factors + "
+        "actionable recommendations.\n\n"
+        "• Inputs (live MVP) · tenure_months, miles_last_30d, home_time_days_last_30d, weeks_since_last_pay_raise, dispatch_complaints_90d, safety events\n"
+        "• Decision (live MVP) · deterministic weighted scoring with documented coefficients · reproducible\n"
+        "• Action (live MVP) · weekly retention queue with recommended action per driver\n"
+        "• KPIs · 12-mo retention +6-12 pp · turnover cost saved $400-900 per driver (target, validated in pilot)\n"
+        "• Pilot-phase add-ons · proper survival analysis (Cox proportional hazards) · LLM coaching template grounded in last 90 days of activity · NPS pulse integration")},
+    {"title": "7 · Module M6 · Predictive Maintenance + Carrier Match · Deep Dive (PILOT-PHASE)",
+     "body": (
+        "Status today · Deterministic MVP ships at POST /api/agent/maintenance/window. Uses a J1939 SPN "
+        "severity dictionary + PM mileage thresholds (PM-A 10k, PM-B 40k) + inspection-violation count to "
+        "return urgency 0-100, band (ROUTINE/WATCH/SCHEDULE_SOON/GROUND_NOW), window in days, and "
+        "specific recommended services.\n\n"
+        "• Inputs (live MVP) · vehicle_id · miles since PM-A/PM-B · fault codes (last 30d) · violation count\n"
+        "• Decision (live MVP) · severity table + mileage thresholds + long-haul amplifier\n"
+        "• Action (live MVP) · returns service list + recommended window; ready for manual shop scheduling\n"
+        "• KPIs · unplanned downtime -20-30% target\n"
+        "• Pilot-phase add-ons · live J1939 ingest via Geotab/Samsara API · time-series anomaly detection · broker-side carrier scorecard")},
     {"title": "8 · ROI Analysis · Two Case Studies", "body": (
         "Two illustrative archetypes drawn from public mid-market freight benchmarks (ATA · ATRI · BLS · FMCSA · EIA). "
-        "All figures are operator-grade ranges, with sensitivity ±10%.\n\n"
+        "ROI assumes M4 (Pricing) in production from day 1 + M1/M3 deterministic-MVPs running shadow-mode in month 1, "
+        "shifting to L2 production by month 3.\n\n"
         "Case A · Small Regional · 50 trucks\n"
         "• Annual savings ~ $380-460k · upfront $38k · license $60k\n"
         "• Payback 6-8 months · 3-yr NPV ~ $720k @ 10% discount\n\n"
@@ -944,19 +977,21 @@ TECHNICAL_DOC_SECTIONS = [
         "• Payback 2-3 months · 3-yr NPV ~ $4.5M @ 10% discount\n\n"
         "Sources · ATA Trucking Industry Profile · ATRI Operational Costs of Trucking 2024 · BLS OEWS 53-3032 · EIA weekly diesel · FMCSA Safety Progress Report")},
     {"title": "9 · Implementation Roadmap · Four Phases", "body": (
-        "• Phase 1 · Readiness · 1 week · data inventory, integrations confirmed, success metrics signed\n"
-        "• Phase 2 · Baseline · 4 weeks · M1 + M3 in shadow mode, baseline measured\n"
-        "• Phase 3 · Pilot · 8-12 weeks · agents in L1/L2 production, weekly KPI review\n"
-        "• Phase 4 · Scale · ongoing · add M2/M4/M5/M6, quarterly business review, audit refresh")},
+        "• Phase 1 · Readiness · 1 week · data inventory, integrations confirmed, success metrics signed in writing\n"
+        "• Phase 2 · Baseline · 4 weeks · M4 (Pricing) production · M1+M3 shadow mode · baseline KPIs measured\n"
+        "• Phase 3 · Pilot · 8-12 weeks · M1/M3 in L1/L2 production, M5/M6 deterministic MVPs activated · weekly KPI review · LLM coaching layers wired progressively\n"
+        "• Phase 4 · Scale · ongoing · M2 fuel MILP + live ELD/TMS write-back + M6 J1939 ingest · quarterly business review · audit refresh")},
     {"title": "10 · Minnesota Opportunity & Technical Appendix", "body": (
         "Minnesota's freight base — Twin Cities I-94/I-35 corridor, intermodal at Midway/CP terminals, agricultural "
         "outbound, and a deep mid-market fleet roster (Bay & Bay, Dart, Halvor Lines, ATS, Lakeville Motor Express, "
         "and dozens of 50-250 truck operators) — is a prime mid-market beachhead. Adoption tends to follow proof, "
         "so pilots are structured for fast metric capture.\n\n"
-        "Technical Appendix · APIs (POST /api/agent/dispatch/recommend, /route/optimize, /compliance/score, "
-        "/pricing/quote, /retention/risk, /maintenance/window) · Auth model (tenant JWT, role-gated overrides) · "
-        "Audit substrate (immutable event log, daily Merkle-anchor option) · LLM substrate (Claude Sonnet 4.5 + GPT-5.2, "
-        "router fallbacks · rate-limit + budget alerts)")},
+        "Technical Appendix · Live APIs · POST /api/quotes/validate · POST /api/agent/dispatch/recommend · "
+        "POST /api/trucker/route · POST /api/trucker/hos-check · POST /api/agent/retention/risk · "
+        "POST /api/agent/maintenance/window · GET /api/agent/modules/status (honest ship-status manifest) · "
+        "Auth model (admin JWT today, tenant JWT in multi-tenant rollout) · "
+        "Audit substrate (immutable SHA-256 hash chain, daily Merkle-anchor option) · "
+        "LLM substrate (Claude Sonnet 4.5 + GPT-5.2 via Emergent · router fallbacks · rate-limit + budget alerts).")},
 ]
 
 

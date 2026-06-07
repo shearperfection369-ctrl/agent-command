@@ -110,19 +110,37 @@ function ArchPanel() {
                 <p className="font-mono-tech text-[11px] text-white/65 mt-2">Operator-grade reference. Every module documents inputs, decision logic, autonomy level, and KPI band.</p>
             </div>
             <div className="grid lg:grid-cols-2 gap-3">
-                {data.modules.map((m) => (
+                {data.modules.map((m) => {
+                    const STATUS_BADGE = {
+                        shipping_full: { label: "● LIVE", c: "#ccff00" },
+                        shipping_partial: { label: "◐ LIVE · PARTIAL", c: "#00ffff" },
+                        shipping_pilot_phase: { label: "◐ PILOT-PHASE", c: "#ffce4f" },
+                        not_built: { label: "○ ROADMAP", c: "rgba(255,255,255,0.45)" },
+                    };
+                    const badge = STATUS_BADGE[m.ship_status] || STATUS_BADGE.not_built;
+                    return (
                     <div key={m.id} className="deck-card p-4 relative" data-testid={`console-arch-${m.id}`}>
                         <CornerBrackets />
-                        <div className="flex justify-between items-baseline">
+                        <div className="flex justify-between items-baseline gap-2 flex-wrap">
                             <span className="font-display font-black text-white text-sm">{m.id} · {m.name}</span>
-                            <span className="mono-label text-[10px] text-[#ccff00]">{m.autonomy}</span>
+                            <div className="flex flex-wrap items-baseline gap-2">
+                                <span className="mono-label text-[10px]" style={{ color: badge.c }}>{badge.label}</span>
+                                <span className="mono-label text-[10px] text-[#ccff00]">{m.autonomy}</span>
+                            </div>
                         </div>
+                        {m.live_endpoint && (
+                            <div className="font-mono-tech text-[10px] text-[#00ffff] mt-1.5">{m.live_endpoint}</div>
+                        )}
+                        {m.live_note && (
+                            <div className="font-mono-tech text-[10px] text-white/55 mt-0.5 italic">{m.live_note}</div>
+                        )}
                         <div className="font-mono-tech text-[10px] text-white/55 mt-2">IN · {m.inputs.join(" · ")}</div>
                         <div className="font-mono-tech text-[10px] text-white/55 mt-1">OUT · {m.outputs.join(" · ")}</div>
                         <div className="font-mono-tech text-[10.5px] text-[#7c5cff] mt-1">LOGIC · {m.decision_logic}</div>
                         <div className="font-mono-tech text-[10.5px] text-[#ccff00] mt-1">KPI · {m.kpi}</div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
             <div className="grid lg:grid-cols-2 gap-3">
                 <div className="deck-card p-4 relative">
