@@ -128,6 +128,11 @@ export default function InvestorInvite() {
                               style={{ background: "transparent", color: "white", border: "1px solid rgba(255,255,255,0.2)" }}>
                             ▶ LIVE PRODUCT DEMO
                         </Link>
+                        <Link to="/demo?tab=quantum" data-testid="invite-quantum-preview-btn"
+                              className="btn-jade text-sm inline-flex items-center gap-2"
+                              style={{ background: "transparent", color: ACCENT.violet, border: `1px solid ${ACCENT.violet}55` }}>
+                            ▶ JADEOS QUANTUM AI · PREVIEW
+                        </Link>
                         <Link to="/demo?tab=tms" data-testid="invite-tms-preview-btn"
                               className="btn-jade text-sm inline-flex items-center gap-2"
                               style={{ background: "transparent", color: ACCENT.cyan, border: `1px solid ${ACCENT.cyan}55` }}>

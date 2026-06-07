@@ -10,6 +10,7 @@ import { SaveActions } from "../components/SaveActions";
 import TruckerAIPanel from "../components/TruckerAIPanel";
 import ConsoleWorkbenchPanel from "../components/ConsoleWorkbenchPanel";
 import HotShotTmsPanel from "../components/HotShotTmsPanel";
+import JadeOSQuantumPanel from "../components/JadeOSQuantumPanel";
 
 const TABS = [
   { id: "chat", label: "OPS CO-PILOT", icon: ChatCircle, color: "#ccff00" },
@@ -18,6 +19,7 @@ const TABS = [
   { id: "qualify", label: "LEAD QUAL", icon: Target, color: "#ff3b8a" },
   { id: "support", label: "SUPPORT TRIAGE", icon: Lifebuoy, color: "#ccff00" },
   { id: "trucker", label: "TRUCKER · DRIVER OPS", icon: Truck, color: "#00ffff" },
+  { id: "quantum", label: "JADEOS QUANTUM AI · FLAGSHIP", icon: Robot, color: "#7c5cff" },
   { id: "tms", label: "HOT SHOT TMS · PREVIEW", icon: Truck, color: "#ccff00" },
   { id: "workbench", label: "OPS WORKBENCH", icon: Database, color: "#ffce4f" },
 ];
@@ -60,7 +62,7 @@ export default function AgentDemo() {
   const [tab, setTab] = useState(() => {
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search).get("tab");
-      if (p && ["chat", "extract", "outreach", "qualify", "support", "trucker", "tms", "workbench"].includes(p)) return p;
+      if (p && ["chat", "extract", "outreach", "qualify", "support", "trucker", "quantum", "tms", "workbench"].includes(p)) return p;
     }
     return "chat";
   });
@@ -144,6 +146,7 @@ export default function AgentDemo() {
           {tab === "qualify" && <QualifyPanel key={`qua-${industry}`} provider={provider} industry={industry} />}
           {tab === "support" && <SupportPanel key={`sup-${industry}`} provider={provider} industry={industry} />}
           {tab === "trucker" && <TruckerAIPanel />}
+          {tab === "quantum" && <JadeOSQuantumPanel />}
           {tab === "tms" && <HotShotTmsPanel />}
           {tab === "workbench" && <ConsoleWorkbenchPanel />}
         </div>

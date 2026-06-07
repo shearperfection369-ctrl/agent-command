@@ -5868,6 +5868,14 @@ async def shutdown_db():
 
 
 app.include_router(api)
+# JadeOS Quantum AI · public VC demo router (under /api/quantum/*)
+try:
+    from quantum_demo import router as _quantum_router
+    api2 = APIRouter(prefix="/api")
+    api2.include_router(_quantum_router)
+    app.include_router(api2)
+except Exception as _e:
+    log.warning("quantum_demo router not loaded · %s", _e)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
