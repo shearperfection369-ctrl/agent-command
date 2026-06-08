@@ -403,6 +403,28 @@ function ResultsDashboard({ audit }) {
     const sav = a.savings;
     const n = a.narrative;
     const tierColor = s.tier_color || TIER_COLOR[s.tier] || ACCENT.jade;
+    const isLighthouse = audit.lead_magnet === "lighthouse_member";
+    const pageCount = isLighthouse ? 14 : 12;
+
+    // Dimension drill-down state
+    const [openDim, setOpenDim] = useState(null);  // dimension id currently open in modal
+    const [dimCache, setDimCache] = useState({}); // {DATA: {explanation, score, band, ...}}
+    const [dimLoading, setDimLoading] = useState(false);
+
+    const openDimension = async (dimId) => {
+        setOpenDim(dimId);
+        if (dimCache[dimId]) return;
+        setDimLoading(true);
+        try {
+            const { data } = await api.get(`/audit/${audit.id}/explain/${dimId}`);
+            setDimCache((prev) => ({ ...prev, [dimId]: data }));
+        } catch {
+            toast.error("Could not load analyst breakdown.");
+            setOpenDim(null);
+        } finally {
+            setDimLoading(false);
+        }
+    };
 
     const dimensions = useMemo(() => ([
         { id: "DATA", label: "Data Maturity", c: ACCENT.cyan },
@@ -454,8 +476,16 @@ function ResultsDashboard({ audit }) {
                                    target="_blank" rel="noreferrer"
                                    className="btn-jade text-xs"
                                    style={{ background: tierColor, color: "#02030a" }}>
-                                    ↓ DOWNLOAD 12-PAGE PDF
+                                    ↓ DOWNLOAD {pageCount}-PAGE PDF
                                 </a>
+                                {isLighthouse && (
+                                    <Link to={`/lighthouse/member/${audit.id}`}
+                                          data-testid="audit-lighthouse-dashboard-link"
+                                          className="btn-ghost text-xs"
+                                          style={{ borderColor: "#ccff0066", color: "#ccff00" }}>
+                                        ▶ LIGHTHOUSE MEMBER VIEW
+                                    </Link>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -470,12 +500,20 @@ function ResultsDashboard({ audit }) {
                     </div>
                     <div className="relative border border-white/10 p-6 bg-[#0a0c18]">
                         <CornerBrackets />
-                        <div className="mono-label text-[10px] text-[#ccff00] mb-4">BREAKDOWN</div>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="mono-label text-[10px] text-[#ccff00]">BREAKDOWN</div>
+                            <div className="mono-label text-[9px] text-white/45">CLICK ANY ROW · ANALYST BREAKDOWN</div>
+                        </div>
                         <div className="space-y-3">
                             {dimensions.map((d) => {
                                 const v = s.dimension_scores[d.id] ?? 0;
                                 return (
-                                    <div key={d.id} className="grid grid-cols-[140px_1fr_50px] items-center gap-3">
+                                    <button
+                                        type="button"
+                                        key={d.id}
+                                        data-testid={`audit-dim-row-${d.id}`}
+                                        onClick={() => openDimension(d.id)}
+                                        className="w-full grid grid-cols-[140px_1fr_60px_18px] items-center gap-3 text-left hover:bg-white/[0.03] transition-colors py-1 px-1 -mx-1 rounded">
                                         <span className="font-mono-tech text-[11.5px] text-white/85">{d.label}</span>
                                         <div className="h-3 bg-[#1a1d2e] relative overflow-hidden">
                                             <div className="absolute inset-y-0 left-0 transition-all"
@@ -484,7 +522,8 @@ function ResultsDashboard({ audit }) {
                                         <span className="font-display font-bold text-right" style={{ color: d.c }}>
                                             {Math.round(v)}
                                         </span>
-                                    </div>
+                                        <span className="text-white/35 text-xs">▸</span>
+                                    </button>
                                 );
                             })}
                         </div>
@@ -602,6 +641,146 @@ function ResultsDashboard({ audit }) {
                         VIEW ALL AUDITS · ADMIN ▸
                     </Link>
                 </div>
+            </div>
+
+            {/* Dimension analyst breakdown modal */}
+            <DimensionModal
+                open={!!openDim}
+                loading={dimLoading}
+                payload={openDim ? dimCache[openDim] : null}
+                onClose={() => setOpenDim(null)}
+                tierColor={tierColor}
+            />
+        </div>
+    );
+}
+
+function DimensionModal({ open, loading, payload, onClose, tierColor }) {
+    if (!open) return null;
+    const exp = payload?.explanation;
+    const band = payload?.band || "";
+    const bandColors = {
+        STRONG: ACCENT.jade, COMPETENT: ACCENT.cyan, DEVELOPING: ACCENT.amber,
+        FRAGILE: ACCENT.magenta, EMBRYONIC: ACCENT.violet,
+    };
+    const bc = bandColors[band] || tierColor;
+    return (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto bg-black/85 backdrop-blur"
+             data-testid="dim-modal" onClick={onClose}>
+            <div className="relative w-full max-w-3xl my-4 border bg-[#06070d]"
+                 style={{ borderColor: `${bc}55` }}
+                 onClick={(e) => e.stopPropagation()}>
+                <CornerBrackets />
+                <button onClick={onClose}
+                        data-testid="dim-modal-close"
+                        className="absolute top-3 right-4 text-white/55 hover:text-white text-xl font-display"
+                        aria-label="close">×</button>
+
+                {loading && (
+                    <div className="p-12 text-center font-mono-tech text-white/55">
+                        // running analyst breakdown…
+                    </div>
+                )}
+
+                {!loading && payload && (
+                    <div className="p-6 sm:p-8 space-y-5" data-testid="dim-modal-body">
+                        <div>
+                            <div className="mono-label text-[9.5px]" style={{ color: bc }}>
+                                ANALYST BREAKDOWN · {payload.dimension_id}
+                            </div>
+                            <h2 className="font-display font-black text-white text-2xl sm:text-3xl mt-1 tracking-tight">
+                                {payload.dimension_label} · <span style={{ color: bc }}>{Math.round(payload.score)}</span>
+                                <span className="text-white/45 text-2xl">/100</span>
+                            </h2>
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                                <span className="mono-label text-[10px] px-2 py-0.5 border"
+                                      style={{ color: bc, borderColor: `${bc}66` }}>
+                                    {band}
+                                </span>
+                                <span className="font-mono-tech text-[11px] text-white/55">{payload.band_blurb}</span>
+                            </div>
+                            <p className="font-mono-tech text-[12px] text-white/55 mt-2">{payload.dimension_blurb}</p>
+                        </div>
+
+                        {exp?.headline && (
+                            <div className="border-l-2 pl-4" style={{ borderColor: bc }}>
+                                <div className="mono-label text-[9.5px] text-white/45">HEADLINE</div>
+                                <p className="font-display font-bold text-white text-lg mt-1 leading-snug">
+                                    {exp.headline}
+                                </p>
+                            </div>
+                        )}
+
+                        {exp?.what_this_score_means && (
+                            <div>
+                                <div className="mono-label text-[9.5px] mb-2" style={{ color: ACCENT.cyan }}>
+                                    WHAT {Math.round(payload.score)}/100 ACTUALLY MEANS
+                                </div>
+                                <p className="font-mono-tech text-[12.5px] text-white/85 leading-relaxed">
+                                    {exp.what_this_score_means}
+                                </p>
+                            </div>
+                        )}
+
+                        {exp?.drivers?.length > 0 && (
+                            <div>
+                                <div className="mono-label text-[9.5px] mb-2" style={{ color: ACCENT.violet }}>
+                                    DRIVERS · YOUR ACTUAL ANSWERS
+                                </div>
+                                <ul className="space-y-2">
+                                    {exp.drivers.map((d, i) => (
+                                        <li key={i} className="font-mono-tech text-[12px] text-white/80 flex gap-2 leading-relaxed">
+                                            <span style={{ color: ACCENT.violet }}>▸</span><span>{d}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {exp?.operator_consequences?.length > 0 && (
+                            <div>
+                                <div className="mono-label text-[9.5px] mb-2" style={{ color: ACCENT.magenta }}>
+                                    DAY-TO-DAY CONSEQUENCES
+                                </div>
+                                <ul className="space-y-2">
+                                    {exp.operator_consequences.map((d, i) => (
+                                        <li key={i} className="font-mono-tech text-[12px] text-white/80 flex gap-2 leading-relaxed">
+                                            <span style={{ color: ACCENT.magenta }}>◐</span><span>{d}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {exp?.ai_leverage && (
+                            <div className="border p-4" style={{ borderColor: `${ACCENT.jade}44`, background: "#0a0c18" }}>
+                                <div className="mono-label text-[9.5px] mb-2" style={{ color: ACCENT.jade }}>
+                                    AI LEVERAGE · WHERE JADEOS LANDS
+                                </div>
+                                <p className="font-mono-tech text-[12.5px] text-white/85 leading-relaxed">
+                                    {exp.ai_leverage}
+                                </p>
+                            </div>
+                        )}
+
+                        {exp?.first_move && (
+                            <div className="border-l-2 pl-4" style={{ borderColor: ACCENT.jade }}>
+                                <div className="mono-label text-[9.5px]" style={{ color: ACCENT.jade }}>
+                                    FIRST MOVE · NEXT 14 DAYS
+                                </div>
+                                <p className="font-display font-bold text-white text-base mt-1 leading-snug">
+                                    {exp.first_move}
+                                </p>
+                            </div>
+                        )}
+
+                        {exp?._source && (
+                            <p className="mono-label text-[8.5px] text-white/30 pt-2 border-t border-white/5">
+                                source · {exp._source}
+                            </p>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

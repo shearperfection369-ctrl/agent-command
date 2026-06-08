@@ -5887,11 +5887,13 @@ except Exception as _e:
     log.warning("audit_playbook router not loaded · %s", _e)
 # JadeOS · AI Readiness Audit (consulting engine)
 try:
-    from consulting_audit import router as _audit_router, admin_router as _audit_admin_router
+    from consulting_audit import router as _audit_router, admin_router as _audit_admin_router, lighthouse_router as _audit_lighthouse_router
     api3 = APIRouter(prefix="/api")
     api3.include_router(_audit_router)
     # admin_router is admin-gated via the admin section requiring auth; expose under /api
     api3.include_router(_audit_admin_router)
+    # Lighthouse member router (public · audit_id is share token)
+    api3.include_router(_audit_lighthouse_router)
     app.include_router(api3)
 except Exception as _e:
     log.warning("consulting_audit router not loaded · %s", _e)

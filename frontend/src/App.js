@@ -26,6 +26,8 @@ import ClientDashboard from "@/pages/ClientDashboard";
 import AuditPage from "@/pages/AuditPage";
 import BrokerFreeAuditLanding from "@/pages/BrokerFreeAuditLanding";
 import AuditPlaybook from "@/pages/AuditPlaybook";
+import LighthouseAuditLanding from "@/pages/LighthouseAuditLanding";
+import LighthouseMemberDashboard from "@/pages/LighthouseMemberDashboard";
 import { MoodPicker } from "@/components/MoodPicker";
 import LlmHealthBanner from "@/components/LlmHealthBanner";
 import { initSentry } from "@/lib/sentry";
@@ -96,6 +98,8 @@ function App() {
             <Route path="/audit/playbook" element={<AuditPlaybook />} />
             <Route path="/free-audit" element={<BrokerFreeAuditLanding />} />
             <Route path="/audit/:id" element={<AuditPage />} />
+            <Route path="/lighthouse/audit" element={<LighthouseAuditLanding />} />
+            <Route path="/lighthouse/member/:auditId" element={<LighthouseMemberDashboard />} />
           </Routes>
         </Chrome>
       </BrowserRouter>

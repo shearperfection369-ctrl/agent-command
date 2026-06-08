@@ -655,7 +655,8 @@ def generate_audit_pdf(audit: dict) -> bytes:
     narrative = audit["analysis"]["narrative"]
     rec = audit["analysis"]["recommended_agents"]
     sav = audit["analysis"]["savings"]
-    total_pages = 12
+    is_lighthouse = audit.get("lead_magnet") == "lighthouse_member"
+    total_pages = 14 if is_lighthouse else 12
 
     # ----- PAGE 1 · COVER -----
     fill_bg()
@@ -879,7 +880,123 @@ def generate_audit_pdf(audit: dict) -> bytes:
     page_chrome(9, total_pages, JADE)
     c.showPage()
 
-    # ----- PAGE 10 · RISK REGISTER -----
+    # ----- LIGHTHOUSE-ONLY PAGES (inserted between ROI and Risk Register) -----
+    if is_lighthouse:
+        # ----- PAGE 10 · LIGHTHOUSE MEMBER · FOUNDING-CUSTOMER PERKS -----
+        fill_bg()
+        title("Lighthouse Member · Founding-Customer Perks", JADE)
+        c.setFillColor(WHITE_DIM)
+        c.setFont("Helvetica", 12.5)
+        intro = (
+            f"{audit['company_name']} is being onboarded under the JadeOS Lighthouse Program — "
+            f"a 5-seat founding-customer cohort. The economics, access, and roadmap influence below "
+            f"are reserved for this cohort and locked in for the lifetime of the contract."
+        )
+        end_y = draw_wrapped(intro, MARGIN_L, PAGE_H - 145,
+                             "Helvetica", 12.5, USABLE_W, white, leading=17)
+
+        perks = [
+            ("Founding-Customer Pricing",
+             f"50% off list for year one. Locked in for the life of the contract. "
+             f"For {audit['company_name']} at the {scores['tier']} tier this protects ~"
+             f"${int(sav['annual_savings_central_usd'] * 0.18):,} in year-one pricing alone."),
+            ("Direct Founder Access",
+             "Dedicated Slack channel with the founder · weekly 30-min sync · roadmap influence vote. "
+             "You are not customer #4,231. You are customer #1."),
+            ("Co-Marketing · Case Study Deal",
+             "Approved logo placement on onejades.com + case study co-authorship after pilot success. "
+             "Distribution: investor deck, press kit, conference reels. (Mutual approval before any publish.)"),
+            ("Design-Partner Equity Option",
+             "Available at signature: nominal equity grant scaled to commercial value. "
+             "Term sheet provided on request — non-dilutive to your cap table, governed by a standard SAFE."),
+            ("Roadmap Influence",
+             f"Top three product asks from {audit['company_name']} go into a dedicated swim lane every quarter — "
+             f"prioritized above general roadmap. Reviewed monthly with founder."),
+            ("Migration · Implementation Concierge",
+             "White-glove migration from existing tools. Founder-led data audit, schema mapping, and "
+             "agent calibration. No outsourced services partner — the operator who built it ships it."),
+        ]
+        y = end_y - 20
+        for label, body in perks:
+            if y < MARGIN_B + 60:
+                break
+            # Label
+            c.setFillColor(JADE)
+            c.setFont("Helvetica-Bold", 11.5)
+            c.drawString(MARGIN_L, y, label.upper())
+            # Body wrapped
+            c.setFillColor(white)
+            body_lines = wrap_to_width(body, "Helvetica", 10.5, USABLE_W)
+            c.setFont("Helvetica", 10.5)
+            for i, ln in enumerate(body_lines[:3]):
+                c.drawString(MARGIN_L, y - 16 - i * 13, ln)
+            y -= 16 + 13 * min(len(body_lines), 3) + 14
+        page_chrome(10, total_pages, JADE)
+        c.showPage()
+
+        # ----- PAGE 11 · PERSONALIZED PILOT TERMS -----
+        fill_bg()
+        title(f"Personalized Pilot Terms · {audit['company_name']}", VIOLET)
+        # Compute personalized terms from the audit
+        team_n = sav["size_used"]
+        weakest_dim = min(scores["dimension_scores"], key=scores["dimension_scores"].get)
+        top_agent = rec[0] if rec else None
+        # Lighthouse pilot price = list $35k × 0.50 = $17.5k
+        list_price = 35000
+        lighthouse_price = int(list_price * 0.50)
+
+        terms = [
+            ("ENGAGEMENT", "90-day dedicated pilot · founder-led · weekly readouts"),
+            ("INVESTMENT",
+             f"${lighthouse_price:,} (Lighthouse founding-customer rate · 50% off ${list_price:,} list)"),
+            ("ANCHOR AGENT",
+             f"{top_agent['name']}" if top_agent else "First-mover agent selected on kickoff call"),
+            ("PRIMARY FOCUS",
+             f"Close the gap on {weakest_dim.title()} ({scores['dimension_scores'].get(weakest_dim, 0):.0f}/100) "
+             f"— your weakest dimension and highest-leverage win"),
+            ("SUCCESS METRICS",
+             f"(1) ≥20% reduction in time-per-decision on the anchor workflow  ·  "
+             f"(2) ≥95% audit chain coverage  ·  "
+             f"(3) Documented year-one savings ≥${sav['annual_savings_low_usd']:,}"),
+            ("YOUR TEAM",
+             f"Executive sponsor + 1 ops lead + 1 IT/data contact "
+             f"(plus front-line operator for {team_n}-seat shop sample)"),
+            ("PAYBACK",
+             f"~{sav['payback_months_estimate']} months at central estimate "
+             f"(${sav['annual_savings_central_usd']:,} year-one savings · range "
+             f"${sav['annual_savings_low_usd']:,}-${sav['annual_savings_high_usd']:,})"),
+            ("EXIT MEMO",
+             "Day 90: signed exit memo with measured ROI vs. baseline, decision to continue at "
+             "founding-customer rate or release with full data export."),
+            ("OUT", "Either party can exit at day 30 with prorated refund · no auto-renewal traps"),
+        ]
+        # Render as a clean 2-column layout
+        y = PAGE_H - 145
+        label_x = MARGIN_L
+        value_x = MARGIN_L + 160
+        value_max_w = PAGE_W - MARGIN_R - value_x
+        for label, value in terms:
+            if y < MARGIN_B + 50:
+                break
+            c.setFillColor(VIOLET)
+            c.setFont("Helvetica-Bold", 10.5)
+            c.drawString(label_x, y, label)
+            c.setFillColor(white)
+            c.setFont("Helvetica", 11)
+            value_lines = wrap_to_width(value, "Helvetica", 11, value_max_w)
+            for i, ln in enumerate(value_lines[:2]):
+                c.drawString(value_x, y - i * 14, ln)
+            y -= 14 * min(len(value_lines), 2) + 14
+        # Callout
+        c.setFillColor(JADE)
+        c.setFont("Helvetica-Bold", 13)
+        callout = "Lighthouse seats remaining: 5  ·  This proposal expires 14 days from issue."
+        c.drawString(MARGIN_L, max(MARGIN_B + 30, y - 10), callout)
+        page_chrome(11, total_pages, VIOLET)
+        c.showPage()
+
+    # ----- PAGE 10/12 · RISK REGISTER -----
+    page_offset = 2 if is_lighthouse else 0
     fill_bg()
     title("Risk Register", AMBER)
     y = PAGE_H - 150
@@ -909,10 +1026,10 @@ def generate_audit_pdf(audit: dict) -> bytes:
         y = mit_y - min(len(mit_lines), 2) * 13 - 14
         if y < MARGIN_B + 30:
             break
-    page_chrome(10, total_pages, AMBER)
+    page_chrome(10 + page_offset, total_pages, AMBER)
     c.showPage()
 
-    # ----- PAGE 11 · NEXT 30 DAYS -----
+    # ----- PAGE 11/13 · NEXT 30 DAYS -----
     fill_bg()
     title("Next 30 Days", CYAN)
     y = PAGE_H - 140
@@ -920,10 +1037,10 @@ def generate_audit_pdf(audit: dict) -> bytes:
         y = bullet(s, y, color=CYAN)
         if y < MARGIN_B + 40:
             break
-    page_chrome(11, total_pages, CYAN)
+    page_chrome(11 + page_offset, total_pages, CYAN)
     c.showPage()
 
-    # ----- PAGE 12 · CONTACT / CTA -----
+    # ----- PAGE 12/14 · CONTACT / CTA -----
     fill_bg()
     title("Ready to deploy.", JADE)
     body_text = ("JadeOS Quantum AI · JadeOS-Agent Suite · Hot Shot TMS — "
@@ -941,7 +1058,7 @@ def generate_audit_pdf(audit: dict) -> bytes:
     note = ("All scoring is reproducible from the question responses. Every action "
             "recommendation is grounded in the deterministic scoring layer, not LLM speculation.")
     draw_wrapped(note, MARGIN_L, 90, "Helvetica", 10, USABLE_W, WHITE_DIM, leading=13)
-    page_chrome(12, total_pages, JADE)
+    page_chrome(12 + page_offset, total_pages, JADE)
     c.showPage()
     c.save()
     return buf.getvalue()
@@ -1096,11 +1213,438 @@ async def audit_report_pdf(audit_id: str):
         raise HTTPException(400, "audit not yet analyzed")
     pdf = generate_audit_pdf(doc)
     safe = "".join(ch if ch.isalnum() else "_" for ch in doc["company_name"])[:40]
+    prefix = "JadeOS_Lighthouse_Audit" if doc.get("lead_magnet") == "lighthouse_member" else "JadeOS_Audit"
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="JadeOS_Audit_{safe}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{prefix}_{safe}.pdf"'},
     )
+
+
+# ============================================================
+# DIMENSION ANALYST BREAKDOWN
+# ============================================================
+# Lets users drill into any single score (e.g. "Data Maturity · 56") and get a
+# senior-analyst-style explanation grounded in their actual question responses.
+
+BAND_META = [
+    {"min": 80, "label": "STRONG",      "color": "#ccff00", "blurb": "Top quartile — operating with discipline."},
+    {"min": 60, "label": "COMPETENT",   "color": "#00ffff", "blurb": "Reliable foundation — incremental gains are highest-leverage."},
+    {"min": 40, "label": "DEVELOPING",  "color": "#ffce4f", "blurb": "Functional but uneven — agent leverage compounds fastest here."},
+    {"min": 20, "label": "FRAGILE",     "color": "#ff3b8a", "blurb": "Material risk — manual workarounds masking the underlying gap."},
+    {"min": 0,  "label": "EMBRYONIC",   "color": "#7c5cff", "blurb": "Greenfield — agents land on raw signal, not a polished process."},
+]
+
+
+def _band_for(score: float) -> dict:
+    for b in BAND_META:
+        if score >= b["min"]:
+            return b
+    return BAND_META[-1]
+
+
+EXPLAIN_PROMPT = """You are JadeOS — an operator-grade AI agent platform — running a single-dimension
+deep-dive for a customer who just received their AI Readiness Audit. You are
+a senior consultant, never sycophantic. Write like a 13-year operator who has
+seen this exact gap close hundreds of times.
+
+You receive:
+  - Company name + industry
+  - One dimension (id + label + score 0-100 + score band)
+  - The 4 specific questions in that dimension AND the customer's 1-5 response per question
+  - The "low" / "high" answer anchors for each question (what 1 means vs 5)
+  - Overall tier (PIONEER/BUILDER/CURIOUS/LEARNING)
+
+Return ONLY a JSON object (no prose, no fences) with EXACTLY this shape:
+{
+  "headline": "One-sentence operator headline (≤14 words).",
+  "what_this_score_means": "60-90 words. Plain-English explanation of what '<score>/100' MEANS for an operator in this industry. Quote at least 2 of the customer's specific answers as the basis. Avoid jargon. No filler.",
+  "drivers": [
+    "3 specific drivers — each ties to a SPECIFIC question response, not generic. Format: 'On <question topic>, you scored <X/5>. <What that means operationally>.'"
+  ],
+  "operator_consequences": [
+    "3 concrete consequences this score creates in their day-to-day operation. Specific to industry. Verb-led."
+  ],
+  "ai_leverage": "60-100 words. WHERE in this dimension AI agents create immediate leverage and WHY. Reference 1-2 of the JadeOS agent capabilities (doc extract, dispatch optimizer, support triage, claims filing, workflow memory, pricing rate-floor, etc.). Cite the specific weak question they should attack first.",
+  "first_move": "One specific action they should take in the next 14 days to move this score by 10+ points. Verb-led."
+}
+Keep every string concrete, anchored in the customer's actual answers. No filler."""
+
+
+@router.get("/{audit_id}/explain/{dimension_id}")
+async def explain_dimension(audit_id: str, dimension_id: str):
+    """Senior-analyst breakdown for a single dimension score.
+
+    Grounded in the customer's actual responses for that dimension.
+    Used by the audit results UI when a user clicks a dimension row.
+    """
+    doc = await _db().audits.find_one({"id": audit_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "audit not found")
+    if not doc.get("analysis"):
+        raise HTTPException(400, "audit not yet analyzed")
+
+    dim_id = dimension_id.upper()
+    if dim_id not in DIMENSIONS:
+        raise HTTPException(404, f"unknown dimension: {dimension_id}")
+
+    scores = doc["analysis"]["scores"]
+    dim_score = float(scores["dimension_scores"].get(dim_id, 0))
+    dim = DIMENSIONS[dim_id]
+    responses = doc.get("responses", {})
+    band = _band_for(dim_score)
+
+    # Gather this dimension's questions + the customer's specific responses
+    question_block = []
+    for q in dim["questions"]:
+        resp_val = responses.get(q["id"])
+        question_block.append({
+            "question_id": q["id"],
+            "text": q["text"],
+            "response": resp_val,
+            "response_label": ("1·" + q["low"]) if resp_val == 1
+                              else ("5·" + q["high"]) if resp_val == 5
+                              else (f"{resp_val}·mid" if resp_val else "not answered"),
+            "low_anchor": q["low"],
+            "high_anchor": q["high"],
+        })
+
+    payload = {
+        "id": doc["id"],
+        "company_name": doc["company_name"],
+        "industry": doc["industry"],
+        "dimension_id": dim_id,
+        "dimension_label": dim["label"],
+        "dimension_blurb": dim["blurb"],
+        "score": dim_score,
+        "band": band["label"],
+        "band_blurb": band["blurb"],
+        "tier": scores["tier"],
+        "questions": question_block,
+    }
+
+    # Cache key: store explanations on the audit doc so repeated clicks are free
+    cached = (doc.get("analysis", {}).get("explanations") or {}).get(dim_id)
+    if cached:
+        return {**payload, "explanation": cached, "_source": "cache"}
+
+    # LLM synthesis with deterministic fallback
+    explanation = await _llm_explain_dimension(payload)
+
+    # Persist to audit doc
+    await _db().audits.update_one(
+        {"id": audit_id},
+        {"$set": {f"analysis.explanations.{dim_id}": explanation,
+                  "updated_at": _utcnow_iso()}},
+    )
+    return {**payload, "explanation": explanation}
+
+
+async def _llm_explain_dimension(payload: dict) -> dict:
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"audit-explain-{payload['id']}-{payload['dimension_id']}",
+            system_message=EXPLAIN_PROMPT,
+        ).with_model("anthropic", AUDIT_MODEL)
+        msg = UserMessage(text=json.dumps(payload, separators=(",", ":")))
+        out = await chat.send_message(msg)
+        text = out if isinstance(out, str) else getattr(out, "content", str(out))
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("```", 2)[1]
+            if text.startswith("json"):
+                text = text[4:]
+        start, end = text.find("{"), text.rfind("}")
+        if start != -1 and end != -1:
+            text = text[start : end + 1]
+        parsed = json.loads(text)
+        parsed["_source"] = "llm"
+        return parsed
+    except Exception as e:
+        # Deterministic fallback so the feature never fails
+        return _fallback_explain(payload, repr(e))
+
+
+def _fallback_explain(payload: dict, err: str = "") -> dict:
+    """Curated explanation grounded in the customer's actual responses. Never LLM-touched."""
+    score = payload["score"]
+    band = payload["band"]
+    label = payload["dimension_label"]
+    industry = payload["industry"].replace("_", " ")
+    qs = payload["questions"]
+    # Find weakest + strongest question in this dimension
+    answered = [q for q in qs if q.get("response")]
+    if not answered:
+        weakest = strongest = qs[0] if qs else {"text": label, "response": 0,
+                                                 "low_anchor": "", "high_anchor": ""}
+    else:
+        weakest = min(answered, key=lambda q: q["response"])
+        strongest = max(answered, key=lambda q: q["response"])
+
+    headline_by_band = {
+        "STRONG":      f"{label} is a strength — protect it and compound from here.",
+        "COMPETENT":   f"{label} is a reliable foundation — sharpening it pays back fast.",
+        "DEVELOPING":  f"{label} is the leverage point — agents land hardest here.",
+        "FRAGILE":     f"{label} is the bottleneck — manual workarounds are masking the gap.",
+        "EMBRYONIC":   f"{label} is greenfield — start with measurement before automation.",
+    }
+    headline = headline_by_band.get(band, f"{label}: {score:.0f}/100.")
+
+    what = (
+        f"A score of {score:.0f}/100 on {label} for a {industry} operator puts you in the "
+        f"{band} band — {payload['band_blurb'].lower()} Specifically, you said {weakest.get('response', '?')}/5 "
+        f"on whether \"{weakest['text']}\" (low anchor: {weakest['low_anchor']}) and "
+        f"{strongest.get('response', '?')}/5 on \"{strongest['text']}\". "
+        f"That gap is the single biggest signal of where {label.lower()} either compounds or fights you "
+        f"every week."
+    )
+
+    drivers = []
+    for q in answered[:3]:
+        if q["response"] <= 2:
+            anchor_note = f'closer to "{q["low_anchor"]}"'
+        elif q["response"] >= 4:
+            anchor_note = f'closer to "{q["high_anchor"]}"'
+        else:
+            anchor_note = "mid-range"
+        drivers.append(
+            f"On \"{q['text'][:80]}...\" you scored {q['response']}/5 — {anchor_note}."
+        )
+    while len(drivers) < 3:
+        drivers.append(f"Limited signal — fewer than {len(answered)} dimension answers captured.")
+
+    consequences_by_band = {
+        "STRONG": [
+            "You spend 70%+ of operator time on judgment, not data wrangling.",
+            f"Onboarding new {industry} hires can be measured in days, not weeks.",
+            "Vendor evaluations stay grounded in your own benchmark data.",
+        ],
+        "COMPETENT": [
+            f"Routine {industry} workflows run cleanly · exceptions still take operator time.",
+            "Reporting cadence is reliable but reactive · forecasting lags ground truth.",
+            "Agents land on a usable substrate · ROI shows up in week 3-4, not day 1.",
+        ],
+        "DEVELOPING": [
+            "Operator hours leak into coordination, reconciliation, and re-entry across tools.",
+            "Decisions wait on someone manually pulling the file or stitching the report.",
+            "Tribal knowledge gates onboarding — your best operator can't go on vacation.",
+        ],
+        "FRAGILE": [
+            "Operations run on heroics — a couple of senior operators carry the whole shop.",
+            "Any growth multiplies admin burden 1:1 — you cannot scale through this gap.",
+            "Audit + compliance asks are expensive fire drills, not routine exports.",
+        ],
+        "EMBRYONIC": [
+            f"Most {industry} ops data lives in people's heads, email threads, or paper.",
+            "You cannot answer 'how did we do last quarter' without a special project.",
+            "Agents have no clean inputs to act on — automation lands on noise.",
+        ],
+    }
+    consequences = consequences_by_band.get(band, consequences_by_band["DEVELOPING"])
+
+    ai_leverage = (
+        f"Highest-leverage AI moves on {label.lower()}: deploy the Workflow Memory + Doc Extract agents to "
+        f"compress \"{weakest['text'][:60]}...\" from manual to one-click. For a {industry} shop at this score, "
+        f"the typical 90-day move is +12-20 points on this dimension alone — driven by removing "
+        f"re-entry, capturing previously-tribal facts, and giving every operator the same recall surface. "
+        f"Tackle that weakest question first; the others lift in its wake."
+    )
+
+    first_move = (
+        "This week: pick the SINGLE worst-answered question above and instrument the underlying "
+        "workflow with a JadeOS Workflow Memory thread. Two weeks of capture is enough to re-score "
+        "by +10 points — and gives the rest of the team a substrate they trust."
+    )
+
+    return {
+        "headline": headline,
+        "what_this_score_means": what,
+        "drivers": drivers[:3],
+        "operator_consequences": consequences[:3],
+        "ai_leverage": ai_leverage,
+        "first_move": first_move,
+        "_source": f"deterministic_fallback ({err[:60] if err else 'no_llm'})",
+    }
+
+
+# ---------- LIGHTHOUSE MEMBER (public · audit_id is the share token) ----------
+
+LIGHTHOUSE_STAGES = [
+    {"id": "applied",         "label": "Applied",          "blurb": "Lighthouse application submitted."},
+    {"id": "audit_started",   "label": "Audit Started",    "blurb": "Working through the 30-question diagnostic."},
+    {"id": "audit_analyzed",  "label": "Audit Complete",   "blurb": "Report delivered. Tier + tailored pilot terms locked in."},
+    {"id": "pilot_kickoff",   "label": "Pilot Kickoff",    "blurb": "Founder + executive sponsor sync · data audit week."},
+    {"id": "pilot_midpoint",  "label": "Mid-Pilot Review", "blurb": "Day 45 readout · agent tuning + scope check."},
+    {"id": "pilot_complete",  "label": "Pilot Exit",       "blurb": "Day 90 exit memo · measured ROI vs. baseline."},
+    {"id": "case_published",  "label": "Case Published",   "blurb": "Co-marketing live · founding-customer rate locked in."},
+]
+
+
+class LighthouseStartBody(BaseModel):
+    """Lighthouse member starting their own audit. Industry-agnostic."""
+    company_name: str = Field(min_length=1, max_length=200)
+    industry: str = "general"
+    operator_name: Optional[str] = None
+    operator_email: str
+    fleet_or_team_size: Optional[str] = None
+    role: Optional[str] = None  # e.g. "COO", "Ops Lead"
+    referral_source: Optional[str] = None  # how they heard about the Lighthouse program
+
+
+lighthouse_router = APIRouter(prefix="/audit/lighthouse", tags=["audit-lighthouse"])
+
+
+@lighthouse_router.post("/start")
+async def start_lighthouse_audit(body: LighthouseStartBody):
+    """Public endpoint for Lighthouse members to start their own audit.
+
+    No admin auth required — the audit_id returned IS the access token for
+    the member dashboard. Audit data is opaque without the ID.
+    """
+    if body.industry not in INDUSTRY_IDS:
+        body.industry = "general"
+    audit_id = uuid.uuid4().hex[:16]
+    doc = AuditDoc(
+        id=audit_id,
+        company_name=body.company_name,
+        industry=body.industry,
+        operator_name=body.operator_name,
+        operator_email=body.operator_email,
+        fleet_or_team_size=body.fleet_or_team_size,
+        source="self_serve",
+        lead_magnet="lighthouse_member",
+        created_at=_utcnow_iso(),
+        updated_at=_utcnow_iso(),
+    )
+    payload = doc.model_dump()
+    # Stash Lighthouse-only metadata in notes (free-form field already on the model)
+    payload["notes"] = {
+        "_role": body.role or "",
+        "_referral_source": body.referral_source or "",
+    }
+    await _db().audits.insert_one(payload)
+    # Auto-create a Lighthouse-flagged pipeline card
+    try:
+        from pipeline_kanban import upsert_card
+        await upsert_card(
+            company_name=body.company_name,
+            industry=body.industry,
+            stage="audit_started",
+            audit_id=audit_id,
+        )
+    except Exception:
+        pass
+    return {
+        "id": audit_id,
+        "industry": body.industry,
+        "status": "draft",
+        "dashboard_url": f"/lighthouse/member/{audit_id}",
+    }
+
+
+@lighthouse_router.get("/{audit_id}/dashboard")
+async def lighthouse_member_dashboard(audit_id: str):
+    """Read-only Lighthouse member view. Audit_id IS the share token.
+
+    Returns: audit summary, pilot timeline (current stage from pipeline_cards),
+    deliverable links, founder + Slack contact info, founding-customer perks.
+    No admin data, no other companies, no agent run history.
+    """
+    doc = await _db().audits.find_one({"id": audit_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "audit not found")
+    if doc.get("lead_magnet") != "lighthouse_member":
+        raise HTTPException(403, "this audit is not a Lighthouse member audit")
+
+    # Look up the matching pipeline card to know current stage
+    current_stage = "audit_started"
+    try:
+        card = await _db().pipeline_cards.find_one(
+            {"audit_id": audit_id}, {"_id": 0}
+        )
+        if card and card.get("stage"):
+            current_stage = card["stage"]
+    except Exception:
+        pass
+
+    # Map pipeline stage → lighthouse timeline stage
+    stage_map = {
+        "cold": "applied",
+        "audit_started": "audit_started",
+        "audit_analyzed": "audit_analyzed",
+        "pilot_discussed": "audit_analyzed",
+        "pilot_signed": "pilot_kickoff",
+        "passed": "case_published",
+    }
+    timeline_stage = stage_map.get(current_stage, "audit_started")
+
+    # Mark timeline progress
+    reached = False
+    timeline = []
+    for s in reversed(LIGHTHOUSE_STAGES):
+        if s["id"] == timeline_stage:
+            reached = True
+        timeline.append({**s, "complete": reached})
+    timeline.reverse()
+    # Mark the first uncompleted stage as "current"
+    for s in timeline:
+        s["current"] = False
+    for s in timeline:
+        if not s["complete"]:
+            s["current"] = True
+            break
+    else:
+        timeline[-1]["current"] = True  # all complete
+
+    analysis = doc.get("analysis") or {}
+    scores = analysis.get("scores") or {}
+    rec = analysis.get("recommended_agents") or []
+    sav = analysis.get("savings") or {}
+
+    return {
+        "audit_id": audit_id,
+        "company_name": doc["company_name"],
+        "industry": doc["industry"],
+        "status": doc.get("status", "draft"),
+        "operator_email": doc.get("operator_email"),
+        "operator_name": doc.get("operator_name"),
+        "created_at": doc.get("created_at"),
+        "summary": {
+            "overall_score": scores.get("overall_score"),
+            "tier": scores.get("tier"),
+            "tier_color": scores.get("tier_color"),
+            "tier_blurb": scores.get("tier_blurb"),
+            "top_agent": rec[0] if rec else None,
+            "annual_savings_central_usd": sav.get("annual_savings_central_usd"),
+            "annual_savings_low_usd": sav.get("annual_savings_low_usd"),
+            "annual_savings_high_usd": sav.get("annual_savings_high_usd"),
+            "payback_months_estimate": sav.get("payback_months_estimate"),
+        },
+        "timeline": timeline,
+        "deliverables": {
+            "audit_pdf_url": f"/api/audit/{audit_id}/report.pdf" if analysis else None,
+            "audit_wizard_url": f"/audit/{audit_id}",
+            "audit_results_url": f"/audit/{audit_id}",
+            "playbook_url": "/audit/playbook",
+            "press_kit_url": "/press",
+        },
+        "contacts": {
+            "founder_name": "Oliver Cummins",
+            "founder_email": "founder@jadeos.ai",
+            "founder_linkedin": "linkedin.com/in/oliver-cummins-a27304a3/",
+            "founder_calendly": "founder@jadeos.ai",  # placeholder · operator can drop Calendly link later
+            "slack_invite": "founder@jadeos.ai",       # operator-issued · email-gated
+        },
+        "perks": [
+            {"label": "Founding-Customer Pricing", "detail": "50% off list for year one · locked for the life of the contract."},
+            {"label": "Direct Founder Access",     "detail": "Dedicated Slack channel · weekly 30-min sync · roadmap influence vote."},
+            {"label": "Co-Marketing",              "detail": "Logo on onejades.com + case study co-author after pilot success."},
+            {"label": "Design-Partner Equity",     "detail": "Nominal equity grant on signature · standard SAFE."},
+            {"label": "Roadmap Influence",         "detail": "Top three product asks go into a dedicated quarterly swim lane."},
+            {"label": "Migration Concierge",       "detail": "Founder-led data audit + schema mapping + agent calibration."},
+        ],
+    }
 
 
 # ---------- ADMIN ----------

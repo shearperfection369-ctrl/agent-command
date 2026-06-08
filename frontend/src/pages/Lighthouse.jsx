@@ -107,7 +107,57 @@ export default function Lighthouse() {
               <a href="#apply" data-testid="lh-cta-apply" className="btn-jade inline-flex items-center gap-2">
                 APPLY FOR A LIGHTHOUSE SEAT <ArrowRight size={16} weight="bold" />
               </a>
+              <Link to="/lighthouse/audit" data-testid="lh-cta-audit" className="btn-ghost inline-flex items-center gap-2"
+                    style={{ borderColor: "#ccff0066", color: "#ccff00" }}>
+                ▶ MEMBERS · RUN YOUR AI READINESS AUDIT
+              </Link>
               <Link to="/cases" data-testid="lh-cta-cases" className="btn-ghost">READ EXISTING FIELD REPORTS</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* LIGHTHOUSE MEMBER AUDIT INVITATION */}
+      <section className="relative border-t border-b border-[#ccff0033] bg-gradient-to-br from-[#0a0c18] via-[#06070d] to-[#15102a]">
+        <div className="absolute inset-0 grid-bg-tight pointer-events-none" />
+        <div className="relative max-w-[1400px] mx-auto px-6 lg:px-10 py-16 lg:py-20">
+          <div className="grid lg:grid-cols-[1.4fr_1fr] gap-12 items-center">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="dot" />
+                <span className="mono-label text-[#ccff00]">MEMBER-ONLY · AI READINESS AUDIT</span>
+              </div>
+              <h2 className="font-display font-black text-white text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[0.95]">
+                Already a Lighthouse member?
+                <br />
+                <span style={{ color: "#ccff00" }}>Run your readiness audit.</span>
+              </h2>
+              <p className="mt-5 text-white/75 max-w-2xl leading-relaxed">
+                30 questions · 6 universal dimensions + your industry KPIs · 25 minutes. You walk out with a
+                <span className="text-white"> 14-page operator-grade report </span>
+                tuned to your company, a tier classification, recommended agents, and personalized 90-day pilot
+                terms at the founding-customer rate. <span className="text-white">Click any dimension on the
+                report</span> for an analyst breakdown that explains exactly what your score means and where AI
+                lands hardest.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <span className="chip">14-PAGE TAILORED PDF</span>
+                <span className="chip chip-cyan">CLICK ANY SCORE · ANALYST DRILL-DOWN</span>
+                <span className="chip chip-violet">PERSONALIZED PILOT TERMS</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <Link to="/lighthouse/audit" data-testid="lh-member-audit-start"
+                    className="btn-jade inline-flex items-center justify-center gap-2 text-base py-4">
+                START THE AUDIT → <ArrowRight size={18} weight="bold" />
+              </Link>
+              <Link to="/audit" data-testid="lh-member-audit-resume"
+                    className="btn-ghost text-center text-xs">
+                RESUME AN EXISTING AUDIT
+              </Link>
+              <p className="font-mono-tech text-[10px] text-white/45 text-center mt-2">
+                Industry-agnostic · 11 verticals tuned · founder-led analysis
+              </p>
             </div>
           </div>
         </div>

@@ -187,6 +187,10 @@ export default function Landing() {
               <Link to="/lighthouse" data-testid="lighthouse-band-cta" className="btn-jade inline-flex items-center justify-center gap-2">
                 APPLY FOR A LIGHTHOUSE SEAT <ArrowRight size={16} weight="bold" />
               </Link>
+              <Link to="/lighthouse/audit" data-testid="lighthouse-band-audit-cta" className="btn-ghost text-center text-xs inline-flex items-center justify-center gap-2"
+                    style={{ borderColor: "#ccff0066", color: "#ccff00" }}>
+                ▶ MEMBERS · RUN YOUR AI READINESS AUDIT
+              </Link>
               <Link to="/cases" className="btn-ghost text-center text-xs">SEE EXISTING FIELD REPORTS</Link>
             </div>
           </div>
