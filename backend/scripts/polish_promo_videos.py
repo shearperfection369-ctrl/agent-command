@@ -42,6 +42,13 @@ VIDEOS = [
 
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
 
+# How much of each Sora source's tail to discard. The last ~3s of every
+# Sora clip is a "wordmark reveal" but the text is misspelled ("ONEJADES.COMN"
+# on v2, "IJADES" / "JADE OSI" glyph artifacts on v3 / v1). We replace it
+# with a deterministic ffmpeg-rendered brand card so the URL + product names
+# render perfectly every time.
+TAIL_TRIM_S = 3.0
+
 # ---------------------------- intro / outro builders ----------------------------
 
 def build_intro_card(out: Path) -> None:
@@ -123,6 +130,86 @@ def build_intro_card(out: Path) -> None:
     subprocess.run(cmd, check=True, capture_output=True)
 
 
+def build_wordmark_card(out: Path) -> None:
+    """3.0s clean brand reveal card.
+
+    Replaces the Sora-generated wordmark reveal (which has misspelled text
+    like 'ONEJADES.COMN' / 'JADE OSI' / 'IJADES' because Sora's text
+    rendering is unreliable). ffmpeg drawtext is pixel-perfect.
+
+    Layout:
+        Eyebrow: TRINITY · ONE PLATFORM
+        Title:   JadeOS  (massive, lime)
+        Sub:     QUANTUM AI · AGENT SUITE · HOT SHOT TMS
+        Tagline: AI AGENTS FOR THE OPERATOR
+        URL:     ONEJADES.COM (jade lime)
+        + corner brackets
+    """
+    eyebrow = "TRINITY · ONE PLATFORM"
+    title   = "JadeOS"
+    sub     = "QUANTUM AI  ·  AGENT SUITE  ·  HOT SHOT TMS"
+    tag     = "AI AGENTS FOR THE OPERATOR"
+    url     = "ONEJADES.COM"
+
+    vf_layers = [
+        # Eyebrow
+        f"drawtext=fontfile={FONT_MONO}:text='{eyebrow}':fontcolor=0x00ffff:"
+        f"fontsize=26:x=(w-text_w)/2:y=240:"
+        f"alpha='if(lt(t,0.15),t/0.15,if(lt(t,2.7),1,(3.0-t)/0.3))'",
+        # Title (massive)
+        f"drawtext=fontfile={FONT_BOLD}:text='{title}':fontcolor=0xccff00:"
+        f"fontsize=220:x=(w-text_w)/2:y=320:"
+        f"alpha='if(lt(t,0.3),t/0.3,if(lt(t,2.7),1,(3.0-t)/0.3))'",
+        # Sub (three products)
+        f"drawtext=fontfile={FONT_MONO}:text='{sub}':fontcolor=white:"
+        f"fontsize=32:x=(w-text_w)/2:y=600:"
+        f"alpha='if(lt(t,0.6),(t-0.3)/0.3,if(lt(t,2.7),1,(3.0-t)/0.3))'",
+        # Tagline
+        f"drawtext=fontfile={FONT_MONO}:text='{tag}':fontcolor=0xaaaaaa:"
+        f"fontsize=24:x=(w-text_w)/2:y=680:"
+        f"alpha='if(lt(t,0.9),(t-0.6)/0.3,if(lt(t,2.7),1,(3.0-t)/0.3))'",
+        # URL (jade)
+        f"drawtext=fontfile={FONT_BOLD}:text='{url}':fontcolor=0xccff00:"
+        f"fontsize=44:x=(w-text_w)/2:y=820:"
+        f"alpha='if(lt(t,1.2),(t-0.9)/0.3,if(lt(t,2.7),1,(3.0-t)/0.3))'",
+        # Corner brackets (lime) — top-left
+        f"drawbox=x=80:y=120:w=140:h=6:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        f"drawbox=x=80:y=120:w=6:h=140:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        # top-right
+        f"drawbox=x={WIDTH-220}:y=120:w=140:h=6:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        f"drawbox=x={WIDTH-86}:y=120:w=6:h=140:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        # bottom-left
+        f"drawbox=x=80:y={HEIGHT-126}:w=140:h=6:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        f"drawbox=x=80:y={HEIGHT-260}:w=6:h=140:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        # bottom-right
+        f"drawbox=x={WIDTH-220}:y={HEIGHT-126}:w=140:h=6:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+        f"drawbox=x={WIDTH-86}:y={HEIGHT-260}:w=6:h=140:color=0xccff00:t=fill:"
+        f"enable='between(t,0.1,2.8)'",
+    ]
+    vf = ",".join(vf_layers)
+    cmd = [
+        FFMPEG, "-y",
+        "-f", "lavfi", "-i",
+        f"color=c=0x05060d:s={WIDTH}x{HEIGHT}:d=3.0:r={FPS}",
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+        "-t", "3.0",
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "slow", "-crf", "18",
+        "-pix_fmt", "yuv420p", "-r", str(FPS),
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+        "-shortest",
+        str(out),
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
 def build_outro_card(out: Path) -> None:
     """1.5s outro with contact + URL."""
     vf_layers = [
@@ -169,16 +256,19 @@ def polish_source(src: Path, out: Path) -> None:
         raise SystemExit(f"Could not determine duration for {src}")
     h, mi, s = m.groups()
     duration = int(h) * 3600 + int(mi) * 60 + float(s)
-    fade_out_start = max(0.0, duration - 0.8)
+    # Trim trailing Sora wordmark (last TAIL_TRIM_S seconds) — Sora text
+    # rendering is unreliable. We re-create that segment with ffmpeg drawtext.
+    trimmed_duration = max(1.0, duration - TAIL_TRIM_S)
+    fade_out_start = max(0.0, trimmed_duration - 0.6)
 
     vf = (
         # Upscale with lanczos for sharper edges than bicubic default
         f"scale={WIDTH}:{HEIGHT}:flags=lanczos,"
         # Mild unsharp to enhance perceived sharpness without halos
         f"unsharp=5:5:0.8:5:5:0.0,"
-        # Fade in 0.3s, fade out last 0.8s
+        # Fade in 0.3s, fade out last 0.6s (right before wordmark card cut-in)
         f"fade=t=in:st=0:d=0.3,"
-        f"fade=t=out:st={fade_out_start:.2f}:d=0.8,"
+        f"fade=t=out:st={fade_out_start:.2f}:d=0.6,"
         f"fps={FPS},format=yuv420p"
     )
     af = (
@@ -187,10 +277,12 @@ def polish_source(src: Path, out: Path) -> None:
         # Resample to common 48 kHz stereo so concat audio streams match
         f"aresample=48000,aformat=channel_layouts=stereo,"
         f"afade=t=in:st=0:d=0.3,"
-        f"afade=t=out:st={fade_out_start:.2f}:d=0.8"
+        f"afade=t=out:st={fade_out_start:.2f}:d=0.6"
     )
     cmd = [
         FFMPEG, "-y", "-i", str(src),
+        # Trim trailing TAIL_TRIM_S seconds (broken Sora wordmark)
+        "-t", f"{trimmed_duration:.2f}",
         "-vf", vf, "-af", af,
         "-c:v", "libx264", "-preset", "slow", "-crf", "18",
         "-pix_fmt", "yuv420p", "-r", str(FPS),
@@ -238,14 +330,17 @@ def main() -> None:
             shutil.copy2(src, bak)
             print(f"backup · {src.name} → {bak}")
 
-    # Build intro + outro once (shared across all 3)
+    # Build intro + wordmark + outro once (shared across all 3)
     intro = WORK / "intro.mp4"
+    wordmark = WORK / "wordmark.mp4"
     outro = WORK / "outro.mp4"
     print("→ building intro card (3.0s) …")
     build_intro_card(intro)
+    print("→ building wordmark reveal card (3.0s) …")
+    build_wordmark_card(wordmark)
     print("→ building outro card (1.5s) …")
     build_outro_card(outro)
-    print(f"   intro · {intro.stat().st_size//1024} KB · outro · {outro.stat().st_size//1024} KB")
+    print(f"   intro · {intro.stat().st_size//1024} KB · wordmark · {wordmark.stat().st_size//1024} KB · outro · {outro.stat().st_size//1024} KB")
 
     # Polish each promo
     for v in VIDEOS:
@@ -255,8 +350,8 @@ def main() -> None:
         print(f"\n→ polishing {v['label']} from {src.name} …")
         polish_source(src, main_polished)
         print(f"   main · {main_polished.stat().st_size//1024} KB")
-        print(f"→ concatenating intro + {v['label']} + outro → {final.name} …")
-        concat([intro, main_polished, outro], final)
+        print(f"→ concatenating intro + {v['label']} + wordmark + outro → {final.name} …")
+        concat([intro, main_polished, wordmark, outro], final)
         size_kb = final.stat().st_size // 1024
         # ffmpeg duration check
         info = subprocess.run([FFMPEG, "-i", str(final)], capture_output=True, text=True).stderr
@@ -271,15 +366,22 @@ def main() -> None:
             meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
         except Exception:
             meta = {}
-        meta["polished_at"] = "2026-02-07T16:00:00Z"
+        meta["polished_at"] = "2026-02-08T20:00:00Z"
         meta["intro"] = "JadeOS AI Suite · trinity products"
         meta["resolution"] = "1920x1080"
         meta["fps"] = 30
         meta["audio_lufs_norm"] = True
         meta["fade_in_s"] = 0.3
-        meta["fade_out_s"] = 0.8
+        meta["fade_out_s"] = 0.6
         meta["intro_s"] = 3.0
+        meta["wordmark_s"] = 3.0
         meta["outro_s"] = 1.5
+        meta["sora_tail_trim_s"] = TAIL_TRIM_S
+        meta["fix_notes"] = (
+            "Sora-rendered wordmark reveal trimmed (text was misspelled · "
+            "ONEJADES.COMN / JADE OSI / IJADES) and replaced with deterministic "
+            "ffmpeg drawtext brand card."
+        )
         meta_path.write_text(json.dumps(meta, indent=2))
         print(f"   ✓ meta refreshed · {meta_path.name}")
 

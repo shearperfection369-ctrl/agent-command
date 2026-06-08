@@ -8,14 +8,17 @@
   "video_id": "video_6a227216d6e481908f001439dfbb2f2c0b47f9178d43088d",
   "audio_source": "jade_voice_12s.mp3",
   "scene": "split-screen real ops \u00b7 Outlook auto-sort + BOL extract + Support triage",
-  "polished_at": "2026-02-07T16:00:00Z",
+  "polished_at": "2026-02-08T20:00:00Z",
   "intro": "JadeOS AI Suite \u00b7 trinity products",
   "resolution": "1920x1080",
   "fps": 30,
   "audio_lufs_norm": true,
   "fade_in_s": 0.3,
-  "fade_out_s": 0.8,
+  "fade_out_s": 0.6,
   "intro_s": 3.0,
   "outro_s": 1.5,
-  "intro_branding": "JadeOS AI Suite \u00b7 trinity products"
+  "intro_branding": "JadeOS AI Suite \u00b7 trinity products",
+  "wordmark_s": 3.0,
+  "sora_tail_trim_s": 3.0,
+  "fix_notes": "Sora-rendered wordmark reveal trimmed (text was misspelled \u00b7 ONEJADES.COMN / JADE OSI / IJADES) and replaced with deterministic ffmpeg drawtext brand card."
 }
