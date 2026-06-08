@@ -247,6 +247,16 @@ async def log_send(body: LogBody):
         "notes": body.notes,
     }
     await _db().outreach_log.insert_one(doc)
+    # Ensure a pipeline card exists (stage=cold unless a higher one already set)
+    try:
+        if body.recipient_company:
+            from pipeline_kanban import upsert_card
+            await upsert_card(
+                company_name=body.recipient_company,
+                stage="cold",
+            )
+    except Exception:
+        pass
     return {"id": log_id, **{k: v for k, v in doc.items() if k != "_id"}}
 
 

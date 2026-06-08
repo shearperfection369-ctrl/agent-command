@@ -5904,6 +5904,14 @@ try:
     app.include_router(api5)
 except Exception as _e:
     log.warning("outreach_campaigns router not loaded · %s", _e)
+# JadeOS · Lighthouse Pipeline kanban (links audits + outreach into one revenue funnel)
+try:
+    from pipeline_kanban import router as _pipeline_router
+    api6 = APIRouter(prefix="/api")
+    api6.include_router(_pipeline_router)
+    app.include_router(api6)
+except Exception as _e:
+    log.warning("pipeline_kanban router not loaded · %s", _e)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

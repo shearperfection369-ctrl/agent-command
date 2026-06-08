@@ -548,13 +548,13 @@ async def llm_synthesize(audit_payload: dict) -> dict:
 # ============================================================
 
 def generate_audit_pdf(audit: dict) -> bytes:
-    """12-page landscape-letter PDF report. Same visual language as the pitch deck."""
+    """12-page landscape-letter PDF report. Width-aware wrapping so nothing
+    runs into the margins. Same visual language as the pitch deck."""
     from reportlab.lib.pagesizes import landscape, letter
     from reportlab.lib.colors import HexColor, white
     from reportlab.pdfgen import canvas
-    from reportlab.lib.units import inch
 
-    PAGE_W, PAGE_H = landscape(letter)
+    PAGE_W, PAGE_H = landscape(letter)  # 792 × 612 pt
     BG = HexColor("#06070d")
     JADE = HexColor("#ccff00")
     CYAN = HexColor("#00ffff")
@@ -563,45 +563,93 @@ def generate_audit_pdf(audit: dict) -> bytes:
     AMBER = HexColor("#ffce4f")
     WHITE_DIM = HexColor("#cccccc")
 
+    # Clean margins so text never collides with page edges.
+    MARGIN_L = 48
+    MARGIN_R = 48
+    MARGIN_B = 56   # reserve room for footer chrome
+    USABLE_W = PAGE_W - MARGIN_L - MARGIN_R  # 696 pt
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=landscape(letter))
 
-    def fill_bg(c):
+    # ---- Width-aware helpers ----------------------------------------------
+
+    def wrap_to_width(text: str, font: str, size: float, max_w: float) -> list[str]:
+        """Greedy word-wrap using real font metrics."""
+        if not text:
+            return []
+        # Honor hard line breaks first
+        out: list[str] = []
+        for paragraph in str(text).split("\n"):
+            words = paragraph.split(" ")
+            line = ""
+            for w in words:
+                trial = f"{line} {w}".strip() if line else w
+                if c.stringWidth(trial, font, size) <= max_w:
+                    line = trial
+                else:
+                    if line:
+                        out.append(line)
+                    # If a single word is longer than max_w, force it on its own line
+                    line = w
+            if line:
+                out.append(line)
+        return out
+
+    def fit_font_size(text: str, font: str, max_w: float, target_size: float, min_size: float = 12) -> float:
+        """Shrink a single-line headline (e.g. company name) until it fits."""
+        size = target_size
+        while size > min_size and c.stringWidth(text, font, size) > max_w:
+            size -= 1
+        return size
+
+    def draw_wrapped(text: str, x: float, y: float, font: str, size: float,
+                     max_w: float, color, leading: float | None = None) -> float:
+        """Draw multi-line text and return the y just below the last line."""
+        c.setFillColor(color)
+        c.setFont(font, size)
+        lead = leading if leading is not None else size * 1.35
+        for line in wrap_to_width(text, font, size, max_w):
+            c.drawString(x, y, line)
+            y -= lead
+        return y
+
+    def fill_bg():
         c.setFillColor(BG)
         c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
 
-    def page_chrome(c, page_n, total, accent):
+    def page_chrome(page_n: int, total: int, accent):
         c.setFillColor(accent)
         c.rect(0, PAGE_H - 24, PAGE_W, 4, fill=1, stroke=0)
         c.setFillColor(HexColor("#777777"))
         c.setFont("Helvetica", 8)
-        c.drawString(40, 24, f"JadeOS · AI Readiness Audit · {audit['company_name']}")
-        c.drawRightString(PAGE_W - 40, 24, f"{page_n:02d} / {total:02d}")
+        footer_left = f"JadeOS · AI Readiness Audit · {audit['company_name']}"
+        # Truncate footer if too long (rare)
+        while c.stringWidth(footer_left, "Helvetica", 8) > USABLE_W - 80:
+            footer_left = footer_left[:-1]
+        c.drawString(MARGIN_L, 24, footer_left)
+        c.drawRightString(PAGE_W - MARGIN_R, 24, f"{page_n:02d} / {total:02d}")
 
-    def title(c, text, color, y=PAGE_H - 80):
+    def title(text: str, color, y: float = PAGE_H - 80):
+        size = fit_font_size(text, "Helvetica-Bold", USABLE_W, 28, 16)
         c.setFillColor(color)
-        c.setFont("Helvetica-Bold", 28)
-        c.drawString(48, y, text)
+        c.setFont("Helvetica-Bold", size)
+        c.drawString(MARGIN_L, y, text)
 
-    def bullet(c, text, y, color=WHITE_DIM, size=11, x=72):
+    def bullet(text: str, y: float, color=WHITE_DIM, size: float = 11.5,
+               x: float = 64) -> float:
+        """Draw • + wrapped text starting at x. Returns next y."""
         c.setFillColor(color)
         c.setFont("Helvetica", size)
         c.drawString(x, y, "•")
+        text_x = x + 16
+        text_max_w = PAGE_W - MARGIN_R - text_x
+        lines = wrap_to_width(text, "Helvetica", size, text_max_w)
         c.setFillColor(white)
-        # Soft wrap at ~95 chars
-        words = text.split(" ")
-        line, lines = [], []
-        for w in words:
-            if sum(len(s) + 1 for s in line) + len(w) > 95:
-                lines.append(" ".join(line))
-                line = [w]
-            else:
-                line.append(w)
-        if line:
-            lines.append(" ".join(line))
+        lead = size * 1.30
         for i, ln in enumerate(lines):
-            c.drawString(x + 14, y - (i * 14), ln)
-        return y - (len(lines) * 14) - 6
+            c.drawString(text_x, y - i * lead, ln)
+        return y - (len(lines) * lead) - 8
 
     scores = audit["analysis"]["scores"]
     narrative = audit["analysis"]["narrative"]
@@ -610,224 +658,290 @@ def generate_audit_pdf(audit: dict) -> bytes:
     total_pages = 12
 
     # ----- PAGE 1 · COVER -----
-    fill_bg(c)
+    fill_bg()
     c.setFillColor(JADE)
-    c.setFont("Helvetica-Bold", 60)
-    c.drawString(48, PAGE_H - 220, "AI Readiness Audit")
+    c.setFont("Helvetica-Bold", 56)
+    c.drawString(MARGIN_L, PAGE_H - 220, "AI Readiness Audit")
+    # Company name — auto-shrink to fit
+    company_size = fit_font_size(audit["company_name"], "Helvetica-Bold",
+                                  USABLE_W, 36, 18)
     c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 36)
-    c.drawString(48, PAGE_H - 270, audit["company_name"])
+    c.setFont("Helvetica-Bold", company_size)
+    c.drawString(MARGIN_L, PAGE_H - 270, audit["company_name"])
     c.setFillColor(CYAN)
-    c.setFont("Helvetica", 14)
-    c.drawString(48, PAGE_H - 295, f"{audit['industry'].replace('_', ' ').upper()}  ·  "
-                                   f"Prepared by JadeOS  ·  {datetime.now(timezone.utc).strftime('%B %d, %Y')}")
+    c.setFont("Helvetica", 13)
+    sub = (f"{audit['industry'].replace('_', ' ').upper()}   ·   Prepared by JadeOS   ·   "
+           f"{datetime.now(timezone.utc).strftime('%B %d, %Y')}")
+    c.drawString(MARGIN_L, PAGE_H - 295, sub)
+    # Big score
     c.setFillColor(HexColor(scores["tier_color"]))
     c.setFont("Helvetica-Bold", 84)
-    c.drawString(48, 180, f"{scores['overall_score']:.0f}")
-    c.setFont("Helvetica", 12)
-    c.drawString(48, 158, "OVERALL SCORE / 100")
-    c.setFillColor(HexColor(scores["tier_color"]))
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(220, 200, f"TIER · {scores['tier']}")
+    c.drawString(MARGIN_L, 180, f"{scores['overall_score']:.0f}")
     c.setFillColor(WHITE_DIM)
-    c.setFont("Helvetica", 12)
-    c.drawString(220, 180, scores["tier_blurb"])
-    page_chrome(c, 1, total_pages, JADE)
+    c.setFont("Helvetica", 11)
+    c.drawString(MARGIN_L, 158, "OVERALL SCORE / 100")
+    # Tier + blurb on the right of the score
+    tier_x = 240
+    c.setFillColor(HexColor(scores["tier_color"]))
+    c.setFont("Helvetica-Bold", 20)
+    c.drawString(tier_x, 210, f"TIER · {scores['tier']}")
+    # Wrap tier blurb to remaining width
+    blurb_max_w = PAGE_W - MARGIN_R - tier_x
+    draw_wrapped(scores["tier_blurb"], tier_x, 188,
+                 "Helvetica", 11.5, blurb_max_w, WHITE_DIM, leading=15)
+    page_chrome(1, total_pages, JADE)
     c.showPage()
 
     # ----- PAGE 2 · EXECUTIVE SUMMARY -----
-    fill_bg(c)
-    title(c, "Executive Summary", CYAN)
-    c.setFillColor(white)
-    c.setFont("Helvetica", 13)
-    words = narrative["executive_summary"].split(" ")
-    line, y = [], PAGE_H - 140
-    for w in words:
-        if sum(len(s) + 1 for s in line) + len(w) > 100:
-            c.drawString(48, y, " ".join(line))
-            y -= 20; line = [w]
-        else:
-            line.append(w)
-    if line:
-        c.drawString(48, y, " ".join(line))
-    # Callout
+    fill_bg()
+    title("Executive Summary", CYAN)
+    end_y = draw_wrapped(narrative["executive_summary"], MARGIN_L, PAGE_H - 140,
+                         "Helvetica", 13, USABLE_W, white, leading=19)
+    # Callout · wrap so it doesn't run off the right edge
+    callout_text = f"\u201C{narrative['callout']}\u201D"
+    callout_lines = wrap_to_width(callout_text, "Helvetica-Bold", 16, USABLE_W)
+    cy = 140 + (len(callout_lines) - 1) * 22
     c.setFillColor(JADE)
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(48, 140, f"\u201C{narrative['callout']}\u201D")
-    page_chrome(c, 2, total_pages, CYAN)
+    for i, ln in enumerate(callout_lines):
+        c.drawString(MARGIN_L, cy - i * 22, ln)
+    page_chrome(2, total_pages, CYAN)
     c.showPage()
 
-    # ----- PAGE 3 · DIMENSION RADAR (text-rendered bar chart fallback) -----
-    fill_bg(c)
-    title(c, "6 Dimensions of AI Readiness", VIOLET)
+    # ----- PAGE 3 · 6 DIMENSIONS · bar chart -----
+    fill_bg()
+    title("6 Dimensions of AI Readiness", VIOLET)
+    label_x = MARGIN_L
+    label_w = 180
+    bar_x = label_x + label_w
+    score_w = 40
+    bar_w_max = PAGE_W - MARGIN_R - bar_x - score_w - 12
     y = PAGE_H - 150
+    row_h = 64
     for dim_id, dim in DIMENSIONS.items():
         score = scores["dimension_scores"].get(dim_id, 0)
-        bar_w = (score / 100.0) * (PAGE_W - 320)
+        bar_w = (score / 100.0) * bar_w_max
+        # Label
         c.setFillColor(HexColor(dim["color"]))
         c.setFont("Helvetica-Bold", 13)
-        c.drawString(48, y, dim["label"])
-        c.setFont("Helvetica", 10)
+        c.drawString(label_x, y, dim["label"])
+        # Blurb (wrap to label_w)
         c.setFillColor(WHITE_DIM)
-        c.drawString(48, y - 14, dim["blurb"])
-        # bar background
+        c.setFont("Helvetica", 9)
+        blurb_lines = wrap_to_width(dim["blurb"], "Helvetica", 9, label_w - 8)
+        for i, ln in enumerate(blurb_lines[:2]):  # cap at 2 lines
+            c.drawString(label_x, y - 14 - i * 11, ln)
+        # Bar background
         c.setFillColor(HexColor("#1a1d2e"))
-        c.rect(220, y - 8, PAGE_W - 320, 20, fill=1, stroke=0)
-        # filled bar
+        c.rect(bar_x, y - 6, bar_w_max, 18, fill=1, stroke=0)
+        # Filled bar
         c.setFillColor(HexColor(dim["color"]))
-        c.rect(220, y - 8, bar_w, 20, fill=1, stroke=0)
-        # score
+        c.rect(bar_x, y - 6, bar_w, 18, fill=1, stroke=0)
+        # Score number
         c.setFillColor(white)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawRightString(PAGE_W - 60, y - 4, f"{score:.0f}")
-        y -= 60
-    page_chrome(c, 3, total_pages, VIOLET)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawRightString(PAGE_W - MARGIN_R, y, f"{score:.0f}")
+        y -= row_h
+    page_chrome(3, total_pages, VIOLET)
     c.showPage()
 
     # ----- PAGE 4 · STRENGTHS -----
-    fill_bg(c)
-    title(c, "Strengths", JADE)
+    fill_bg()
+    title("Strengths", JADE)
     y = PAGE_H - 140
     for s in narrative["strengths"]:
-        y = bullet(c, s, y, color=JADE)
-    page_chrome(c, 4, total_pages, JADE)
+        y = bullet(s, y, color=JADE)
+        if y < MARGIN_B + 40:
+            break
+    page_chrome(4, total_pages, JADE)
     c.showPage()
 
     # ----- PAGE 5 · GAPS -----
-    fill_bg(c)
-    title(c, "Gaps", MAGENTA)
+    fill_bg()
+    title("Gaps", MAGENTA)
     y = PAGE_H - 140
     for g in narrative["gaps"]:
-        y = bullet(c, g, y, color=MAGENTA)
-    page_chrome(c, 5, total_pages, MAGENTA)
+        y = bullet(g, y, color=MAGENTA)
+        if y < MARGIN_B + 40:
+            break
+    page_chrome(5, total_pages, MAGENTA)
     c.showPage()
 
     # ----- PAGE 6 · INDUSTRY KPIs -----
-    fill_bg(c)
-    title(c, f"Industry KPIs · {audit['industry'].replace('_', ' ').title()}", CYAN)
+    fill_bg()
+    industry_title = f"Industry KPIs · {audit['industry'].replace('_', ' ').title()}"
+    title(industry_title, CYAN)
     y = PAGE_H - 150
     industry_qs = INDUSTRY_KPIS.get(audit["industry"], INDUSTRY_KPIS["general"])
+    bar_max_w = USABLE_W * 0.62  # leaves headroom for low/high labels at right
     for q in industry_qs:
         v = audit.get("responses", {}).get(q["id"], 0)
         score = (v - 1) * 25 if v else 0
-        bar_w = (score / 100.0) * 400
+        bar_w = (score / 100.0) * bar_max_w
+        # Question (wrap to two lines max within usable width)
+        q_lines = wrap_to_width(q["text"], "Helvetica", 10, USABLE_W)
         c.setFillColor(white)
         c.setFont("Helvetica", 10)
-        c.drawString(48, y, q["text"][:90])
+        for i, ln in enumerate(q_lines[:2]):
+            c.drawString(MARGIN_L, y - i * 12, ln)
+        used_lines = min(len(q_lines), 2)
+        bar_y = y - (used_lines * 12) - 8
+        # Bar
         c.setFillColor(HexColor("#1a1d2e"))
-        c.rect(48, y - 16, 400, 8, fill=1, stroke=0)
+        c.rect(MARGIN_L, bar_y, bar_max_w, 8, fill=1, stroke=0)
         c.setFillColor(CYAN)
-        c.rect(48, y - 16, bar_w, 8, fill=1, stroke=0)
+        c.rect(MARGIN_L, bar_y, bar_w, 8, fill=1, stroke=0)
+        # Score chip on the right
+        c.setFillColor(WHITE_DIM)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(MARGIN_L + bar_max_w + 12, bar_y, f"{score:.0f}/100")
+        # Low/High labels
         c.setFillColor(WHITE_DIM)
         c.setFont("Helvetica", 9)
-        c.drawString(48, y - 30, f"{q['low']}   →   {q['high']}")
-        y -= 50
-    page_chrome(c, 6, total_pages, CYAN)
+        lh = f"low · {q['low']}      high · {q['high']}"
+        c.drawString(MARGIN_L, bar_y - 14, lh[:120])
+        y = bar_y - 30
+        if y < MARGIN_B + 30:
+            break
+    page_chrome(6, total_pages, CYAN)
     c.showPage()
 
     # ----- PAGE 7 · RECOMMENDED AGENTS -----
-    fill_bg(c)
-    title(c, "Recommended JadeOS Agents", JADE)
-    y = PAGE_H - 140
+    fill_bg()
+    title("Recommended JadeOS Agents", JADE)
+    y = PAGE_H - 150
     for a in rec:
         c.setFillColor(JADE)
         c.setFont("Helvetica-Bold", 14)
-        c.drawString(48, y, f"{a['id']} · {a['name']}")
+        c.drawString(MARGIN_L, y, f"{a['id']} · {a['name']}")
+        # Rationale wraps full width
         c.setFillColor(WHITE_DIM)
+        rat_lines = wrap_to_width(a["rationale"], "Helvetica", 11, USABLE_W)
         c.setFont("Helvetica", 11)
-        c.drawString(48, y - 18, a["rationale"][:120])
-        y -= 50
-    page_chrome(c, 7, total_pages, JADE)
+        for i, ln in enumerate(rat_lines[:3]):
+            c.drawString(MARGIN_L, y - 18 - i * 14, ln)
+        y -= 18 + 14 * min(len(rat_lines), 3) + 16
+        if y < MARGIN_B + 40:
+            break
+    page_chrome(7, total_pages, JADE)
     c.showPage()
 
     # ----- PAGE 8 · 90-DAY PILOT -----
-    fill_bg(c)
-    title(c, "Proposed 90-Day Pilot", VIOLET)
+    fill_bg()
+    title("Proposed 90-Day Pilot", VIOLET)
     p = narrative["pilot_proposal"]
     c.setFillColor(white)
     c.setFont("Helvetica-Bold", 13)
-    c.drawString(48, PAGE_H - 140, f"DURATION · {p['duration_days']} days     INVESTMENT · ${p['investment_usd']:,}")
-    c.setFillColor(WHITE_DIM)
-    c.setFont("Helvetica", 12)
-    c.drawString(48, PAGE_H - 170, f"SCOPE · {p['scope']}")
-    c.setFillColor(JADE)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(48, PAGE_H - 210, "SUCCESS METRICS")
-    y = PAGE_H - 230
-    for m in p["success_metrics"]:
-        y = bullet(c, m, y, color=JADE)
+    header = f"DURATION · {p['duration_days']} days     INVESTMENT · ${p['investment_usd']:,}"
+    c.drawString(MARGIN_L, PAGE_H - 140, header)
+    # SCOPE — full-width wrap
     c.setFillColor(CYAN)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(48, y - 14, "TEAM REQUIRED")
-    c.setFillColor(WHITE_DIM)
-    c.setFont("Helvetica", 11)
-    c.drawString(48, y - 30, p["team_required"][:120])
-    page_chrome(c, 8, total_pages, VIOLET)
+    c.setFont("Helvetica-Bold", 10.5)
+    c.drawString(MARGIN_L, PAGE_H - 165, "SCOPE")
+    y = draw_wrapped(p["scope"], MARGIN_L, PAGE_H - 180,
+                     "Helvetica", 12, USABLE_W, WHITE_DIM, leading=16)
+    # SUCCESS METRICS
+    c.setFillColor(JADE)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(MARGIN_L, y - 8, "SUCCESS METRICS")
+    y -= 28
+    for m in p["success_metrics"]:
+        y = bullet(m, y, color=JADE, size=11)
+        if y < MARGIN_B + 60:
+            break
+    # TEAM REQUIRED
+    c.setFillColor(CYAN)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(MARGIN_L, y - 4, "TEAM REQUIRED")
+    draw_wrapped(p["team_required"], MARGIN_L, y - 22,
+                 "Helvetica", 11, USABLE_W, WHITE_DIM, leading=14)
+    page_chrome(8, total_pages, VIOLET)
     c.showPage()
 
     # ----- PAGE 9 · ROI -----
-    fill_bg(c)
-    title(c, "Estimated Annual Savings", JADE)
+    fill_bg()
+    title("Estimated Annual Savings", JADE)
     c.setFillColor(JADE)
     c.setFont("Helvetica-Bold", 58)
-    c.drawString(48, PAGE_H - 220, f"${sav['annual_savings_central_usd']:,}")
+    c.drawString(MARGIN_L, PAGE_H - 220, f"${sav['annual_savings_central_usd']:,}")
     c.setFillColor(WHITE_DIM)
     c.setFont("Helvetica", 12)
-    c.drawString(48, PAGE_H - 245, f"central estimate · range ${sav['annual_savings_low_usd']:,} – ${sav['annual_savings_high_usd']:,}")
+    c.drawString(MARGIN_L, PAGE_H - 245,
+                 f"central estimate · range ${sav['annual_savings_low_usd']:,} – "
+                 f"${sav['annual_savings_high_usd']:,}")
     c.setFillColor(CYAN)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(48, PAGE_H - 310, f"PAYBACK · ~{sav['payback_months_estimate']} months")
-    c.setFillColor(WHITE_DIM)
-    c.setFont("Helvetica", 10)
-    c.drawString(48, 70, f"Basis · {sav['size_used']} seats · industry benchmark ($/seat) · tier factor "
-                          f"({scores['tier']}) · 18% indirect-labor capture.")
-    page_chrome(c, 9, total_pages, JADE)
+    c.drawString(MARGIN_L, PAGE_H - 310, f"PAYBACK · ~{sav['payback_months_estimate']} months")
+    # Basis · wrap
+    basis = (f"Basis · {sav['size_used']} seats · industry benchmark "
+             f"($/seat) · tier factor ({scores['tier']}) · 18% indirect-labor capture.")
+    draw_wrapped(basis, MARGIN_L, 90, "Helvetica", 10, USABLE_W, WHITE_DIM, leading=13)
+    page_chrome(9, total_pages, JADE)
     c.showPage()
 
-    # ----- PAGE 10 · RISKS -----
-    fill_bg(c)
-    title(c, "Risk Register", AMBER)
-    y = PAGE_H - 140
+    # ----- PAGE 10 · RISK REGISTER -----
+    fill_bg()
+    title("Risk Register", AMBER)
+    y = PAGE_H - 150
     sev_color = {"high": MAGENTA, "med": AMBER, "low": JADE}
+    # Two columns: severity tag (90pt) | content
+    tag_w = 90
+    content_x = MARGIN_L + tag_w
+    content_max_w = PAGE_W - MARGIN_R - content_x
     for r in narrative["risks"]:
+        # Severity tag
         c.setFillColor(sev_color.get(r["severity"], AMBER))
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(48, y, f"[{r['severity'].upper()}]")
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(MARGIN_L, y, f"[{r['severity'].upper()}]")
+        # Risk
         c.setFillColor(white)
-        c.drawString(110, y, r["risk"][:90])
+        c.setFont("Helvetica-Bold", 11.5)
+        risk_lines = wrap_to_width(r["risk"], "Helvetica-Bold", 11.5, content_max_w)
+        for i, ln in enumerate(risk_lines[:2]):
+            c.drawString(content_x, y - i * 14, ln)
+        # Mitigation
         c.setFillColor(WHITE_DIM)
         c.setFont("Helvetica", 10)
-        c.drawString(110, y - 14, f"Mitigation · {r['mitigation'][:100]}")
-        y -= 44
-    page_chrome(c, 10, total_pages, AMBER)
+        mit_y = y - min(len(risk_lines), 2) * 14 - 4
+        mit_lines = wrap_to_width(f"Mitigation · {r['mitigation']}", "Helvetica", 10, content_max_w)
+        for i, ln in enumerate(mit_lines[:2]):
+            c.drawString(content_x, mit_y - i * 13, ln)
+        y = mit_y - min(len(mit_lines), 2) * 13 - 14
+        if y < MARGIN_B + 30:
+            break
+    page_chrome(10, total_pages, AMBER)
     c.showPage()
 
     # ----- PAGE 11 · NEXT 30 DAYS -----
-    fill_bg(c)
-    title(c, "Next 30 Days", CYAN)
+    fill_bg()
+    title("Next 30 Days", CYAN)
     y = PAGE_H - 140
     for s in narrative["next_30_days"]:
-        y = bullet(c, s, y, color=CYAN)
-    page_chrome(c, 11, total_pages, CYAN)
+        y = bullet(s, y, color=CYAN)
+        if y < MARGIN_B + 40:
+            break
+    page_chrome(11, total_pages, CYAN)
     c.showPage()
 
-    # ----- PAGE 12 · CONTACT / CALL TO ACTION -----
-    fill_bg(c)
-    title(c, "Ready to deploy.", JADE)
-    c.setFillColor(white)
-    c.setFont("Helvetica", 14)
-    c.drawString(48, PAGE_H - 180,
-                 "JadeOS Quantum AI · JadeOS-Agent Suite · Hot Shot TMS — built solo by a 13-year operator.")
+    # ----- PAGE 12 · CONTACT / CTA -----
+    fill_bg()
+    title("Ready to deploy.", JADE)
+    body_text = ("JadeOS Quantum AI · JadeOS-Agent Suite · Hot Shot TMS — "
+                 "built solo by a 13-year operator.")
+    draw_wrapped(body_text, MARGIN_L, PAGE_H - 170,
+                 "Helvetica", 13, USABLE_W, white, leading=18)
     c.setFillColor(CYAN)
     c.setFont("Helvetica-Bold", 22)
-    c.drawString(48, PAGE_H - 240, "founder@jadeos.ai")
-    c.drawString(48, PAGE_H - 270, "onejades.com")
-    c.setFillColor(WHITE_DIM)
-    c.setFont("Helvetica", 11)
-    c.drawString(48, 50,
-                 "All scoring is reproducible from the question responses. Every action recommendation "
-                 "is grounded in the deterministic scoring layer, not LLM speculation.")
-    page_chrome(c, 12, total_pages, JADE)
+    c.drawString(MARGIN_L, PAGE_H - 250, "founder@jadeos.ai")
+    c.drawString(MARGIN_L, PAGE_H - 280, "onejades.com")
+    c.setFillColor(VIOLET)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(MARGIN_L, PAGE_H - 320, "linkedin.com/in/oliver-cummins-a27304a3/")
+    # Footer note · wrapped
+    note = ("All scoring is reproducible from the question responses. Every action "
+            "recommendation is grounded in the deterministic scoring layer, not LLM speculation.")
+    draw_wrapped(note, MARGIN_L, 90, "Helvetica", 10, USABLE_W, WHITE_DIM, leading=13)
+    page_chrome(12, total_pages, JADE)
     c.showPage()
     c.save()
     return buf.getvalue()
@@ -878,6 +992,17 @@ async def start_audit(body: StartBody):
         updated_at=_utcnow_iso(),
     )
     await _db().audits.insert_one(doc.model_dump())
+    # Auto-create / promote pipeline card
+    try:
+        from pipeline_kanban import upsert_card
+        await upsert_card(
+            company_name=body.company_name,
+            industry=body.industry,
+            stage="audit_started",
+            audit_id=audit_id,
+        )
+    except Exception:
+        pass  # never fail audit start on pipeline upsert error
     return {"id": audit_id, "industry": body.industry, "status": "draft"}
 
 
@@ -940,6 +1065,17 @@ async def analyze_audit(audit_id: str):
         {"id": audit_id},
         {"$set": {"analysis": analysis, "status": "analyzed", "updated_at": _utcnow_iso()}},
     )
+    # Promote pipeline card to audit_analyzed
+    try:
+        from pipeline_kanban import upsert_card
+        await upsert_card(
+            company_name=doc["company_name"],
+            industry=doc["industry"],
+            stage="audit_analyzed",
+            audit_id=audit_id,
+        )
+    except Exception:
+        pass
     return analysis
 
 

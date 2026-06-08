@@ -20,6 +20,7 @@ import MemoryThreadsPanel from "../components/MemoryThreadsPanel";
 import ClaimsPanel from "../components/ClaimsPanel";
 import AuditAdminPanel from "../components/AuditAdminPanel";
 import OutreachPanel from "../components/OutreachPanel";
+import PipelinePanel from "../components/PipelinePanel";
 import RiskGuardPanel from "../components/RiskGuardPanel";
 import TruckerAIPanel from "../components/TruckerAIPanel";
 import WorkbenchPanel from "../components/WorkbenchPanel";
@@ -89,6 +90,7 @@ export default function Dashboard() {
     { id: "compliance", label: "COMPLIANCE · ROUTE", c: "#7c5cff", n: "" },
     { id: "launch", label: "BIG BANG · LAUNCH", c: "#ccff00", n: "" },
     { id: "lighthouse", label: "LIGHTHOUSE", c: "#ff3b8a", n: lighthouse.length },
+    { id: "pipeline", label: "PIPELINE KANBAN", c: "#ccff00", n: "" },
     { id: "audits", label: "AI READINESS AUDIT", c: "#ccff00", n: "" },
     { id: "outreach", label: "OUTREACH CAMPAIGNS", c: "#ff3b8a", n: "" },
     { id: "leads", label: "LEADS", c: "#ccff00", n: leads.length },
@@ -156,6 +158,7 @@ export default function Dashboard() {
           {tab === "compliance" && <CompliancePanel />}
           {tab === "launch" && <LaunchCampaignPanel />}
           {tab === "lighthouse" && <LighthousePanel apps={lighthouse} reload={load} />}
+          {tab === "pipeline" && <PipelinePanel />}
           {tab === "audits" && <AuditAdminPanel />}
           {tab === "outreach" && <OutreachPanel />}
           {tab === "leads" && (
