@@ -38,7 +38,11 @@ export default function Dashboard() {
   const [tab, setTab] = useState("leads");
 
   useEffect(() => {
-    if (!isAuthed()) { nav("/login"); return; }
+    if (!isAuthed()) {
+      const next = window.location.pathname + window.location.search + window.location.hash;
+      nav(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
     load();
   }, []);
 

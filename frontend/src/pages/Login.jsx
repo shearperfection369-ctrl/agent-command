@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, Lock } from "@/lib/icons";
 import { api } from "../lib/api";
@@ -8,6 +8,7 @@ import { CornerBrackets } from "../components/Brackets";
 
 export default function Login() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +20,13 @@ export default function Login() {
       const { data } = await api.post("/auth/login", { email, password });
       setToken(data.access_token);
       toast.success("Locked in.");
-      nav("/admin");
+      const next = params.get("next");
+      // Only honor in-app paths to avoid open-redirect
+      if (next && next.startsWith("/")) {
+        nav(next);
+      } else {
+        nav("/admin");
+      }
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Bad credentials.");
     } finally { setLoading(false); }
