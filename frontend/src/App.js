@@ -28,6 +28,7 @@ import BrokerFreeAuditLanding from "@/pages/BrokerFreeAuditLanding";
 import AuditPlaybook from "@/pages/AuditPlaybook";
 import LighthouseAuditLanding from "@/pages/LighthouseAuditLanding";
 import LighthouseMemberDashboard from "@/pages/LighthouseMemberDashboard";
+import VcPackage from "@/pages/VcPackage";
 import { MoodPicker } from "@/components/MoodPicker";
 import LlmHealthBanner from "@/components/LlmHealthBanner";
 import { initSentry } from "@/lib/sentry";
@@ -100,6 +101,8 @@ function App() {
             <Route path="/audit/:id" element={<AuditPage />} />
             <Route path="/lighthouse/audit" element={<LighthouseAuditLanding />} />
             <Route path="/lighthouse/member/:auditId" element={<LighthouseMemberDashboard />} />
+            <Route path="/vc-package" element={<VcPackage />} />
+            <Route path="/investors" element={<VcPackage />} />
           </Routes>
         </Chrome>
       </BrowserRouter>

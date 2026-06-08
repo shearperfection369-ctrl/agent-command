@@ -6,6 +6,7 @@ const links = [
   { to: "/reel", label: "Demo Reel" },
   { to: "/demo", label: "Console" },
   { to: "/lighthouse", label: "Lighthouse" },
+  { to: "/vc-package", label: "VC Package" },
   { to: "/deck", label: "Pitch Deck" },
   { to: "/cases", label: "Cases" },
   { to: "/billing", label: "Pricing" },
