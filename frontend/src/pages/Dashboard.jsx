@@ -18,6 +18,8 @@ import OperationsPanel from "../components/OperationsPanel";
 import IntegrationsScaffoldPanel from "../components/IntegrationsScaffoldPanel";
 import MemoryThreadsPanel from "../components/MemoryThreadsPanel";
 import ClaimsPanel from "../components/ClaimsPanel";
+import AuditAdminPanel from "../components/AuditAdminPanel";
+import OutreachPanel from "../components/OutreachPanel";
 import RiskGuardPanel from "../components/RiskGuardPanel";
 import TruckerAIPanel from "../components/TruckerAIPanel";
 import WorkbenchPanel from "../components/WorkbenchPanel";
@@ -83,6 +85,8 @@ export default function Dashboard() {
     { id: "compliance", label: "COMPLIANCE · ROUTE", c: "#7c5cff", n: "" },
     { id: "launch", label: "BIG BANG · LAUNCH", c: "#ccff00", n: "" },
     { id: "lighthouse", label: "LIGHTHOUSE", c: "#ff3b8a", n: lighthouse.length },
+    { id: "audits", label: "AI READINESS AUDIT", c: "#ccff00", n: "" },
+    { id: "outreach", label: "OUTREACH CAMPAIGNS", c: "#ff3b8a", n: "" },
     { id: "leads", label: "LEADS", c: "#ccff00", n: leads.length },
     { id: "playground", label: "PLAYGROUND", c: "#7c5cff", n: "" },
     { id: "runs", label: "AGENT RUNS", c: "#00ffff", n: runs.length },
@@ -148,6 +152,8 @@ export default function Dashboard() {
           {tab === "compliance" && <CompliancePanel />}
           {tab === "launch" && <LaunchCampaignPanel />}
           {tab === "lighthouse" && <LighthousePanel apps={lighthouse} reload={load} />}
+          {tab === "audits" && <AuditAdminPanel />}
+          {tab === "outreach" && <OutreachPanel />}
           {tab === "leads" && (
             <div className="space-y-6">
               <ProspectsPanel />

@@ -23,6 +23,9 @@ import EmbedReel from "@/pages/EmbedReel";
 import PressKit from "@/pages/PressKit";
 import ClientLogin from "@/pages/ClientLogin";
 import ClientDashboard from "@/pages/ClientDashboard";
+import AuditPage from "@/pages/AuditPage";
+import BrokerFreeAuditLanding from "@/pages/BrokerFreeAuditLanding";
+import AuditPlaybook from "@/pages/AuditPlaybook";
 import { MoodPicker } from "@/components/MoodPicker";
 import LlmHealthBanner from "@/components/LlmHealthBanner";
 import { initSentry } from "@/lib/sentry";
@@ -88,6 +91,11 @@ function App() {
             <Route path="/client/login" element={<ClientLogin />} />
             <Route path="/client/verify" element={<ClientLogin />} />
             <Route path="/client/dashboard" element={<ClientDashboard />} />
+            <Route path="/audit" element={<AuditPage />} />
+            <Route path="/audit/broker-free" element={<BrokerFreeAuditLanding />} />
+            <Route path="/audit/playbook" element={<AuditPlaybook />} />
+            <Route path="/free-audit" element={<BrokerFreeAuditLanding />} />
+            <Route path="/audit/:id" element={<AuditPage />} />
           </Routes>
         </Chrome>
       </BrowserRouter>

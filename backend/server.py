@@ -5876,6 +5876,34 @@ try:
     app.include_router(api2)
 except Exception as _e:
     log.warning("quantum_demo router not loaded · %s", _e)
+# JadeOS · Audit playbook PDFs (must register BEFORE consulting_audit so static paths
+# like /audit/playbook.pdf don't get caught by the /audit/{audit_id} catchall route)
+try:
+    from audit_playbook import playbook_router as _audit_pb_router
+    api4 = APIRouter(prefix="/api")
+    api4.include_router(_audit_pb_router)
+    app.include_router(api4)
+except Exception as _e:
+    log.warning("audit_playbook router not loaded · %s", _e)
+# JadeOS · AI Readiness Audit (consulting engine)
+try:
+    from consulting_audit import router as _audit_router, admin_router as _audit_admin_router
+    api3 = APIRouter(prefix="/api")
+    api3.include_router(_audit_router)
+    # admin_router is admin-gated via the admin section requiring auth; expose under /api
+    api3.include_router(_audit_admin_router)
+    app.include_router(api3)
+except Exception as _e:
+    log.warning("consulting_audit router not loaded · %s", _e)
+# JadeOS · Outreach campaign engine (broker email · trinity pitch · consulting upsell · LinkedIn · follow-ups)
+try:
+    from outreach_campaigns import router as _outreach_router, admin_router as _outreach_admin_router
+    api5 = APIRouter(prefix="/api")
+    api5.include_router(_outreach_router)
+    api5.include_router(_outreach_admin_router)
+    app.include_router(api5)
+except Exception as _e:
+    log.warning("outreach_campaigns router not loaded · %s", _e)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
